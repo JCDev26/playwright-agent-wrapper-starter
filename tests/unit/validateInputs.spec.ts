@@ -1,3 +1,4 @@
+import path from "node:path";
 import { test, expect } from "@playwright/test";
 import {
   InputValidationError,
@@ -70,10 +71,14 @@ test.describe("validateAndNormalizeTarget", () => {
   });
 
   test("rejects an absolute spec path", async () => {
+    const absoluteSpec = path.resolve("tests", "smoke", "example.spec.ts");
+
+    expect(path.isAbsolute(absoluteSpec)).toBe(true);
+
     expect(() =>
       validateAndNormalizeTarget({
         project: "smoke",
-        spec: "C:\\repo\\tests\\smoke\\example.spec.ts",
+        spec: absoluteSpec,
       }),
     ).toThrow(/repo-relative/);
   });
