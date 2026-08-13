@@ -42,7 +42,7 @@ Instead, it should do something narrower and more useful for review:
 - surface those references in the result object
 - help a reviewer understand where to inspect next
 
-That keeps the wrapper focused on execution governance and review support.
+That keeps the wrapper focused on bounded execution and review support.
 
 ## First-version artifact categories
 

@@ -270,7 +270,7 @@ A small review model that is consistent and useful is better than a larger one t
 
 ## Design stance
 
-This repository assumes that trustworthy AI-assisted execution is not just a question of what can be run.
+This repository assumes that trustworthy externally assisted execution is not just a question of what can be run.
 
 It is also a question of what a human can understand afterward.
 

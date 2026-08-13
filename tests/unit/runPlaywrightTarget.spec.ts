@@ -2,8 +2,8 @@ import { test, expect } from "@playwright/test";
 import {
   runPlaywrightTarget,
   type PlaywrightSpawnSync,
-} from "../../tools/agent/execution/runPlaywrightTarget";
-import type { PlaywrightArtifacts } from "../../tools/agent/contract/resultSchema";
+} from "../../src/playwright-wrapper/execution/runPlaywrightTarget";
+import type { PlaywrightArtifacts } from "../../src/playwright-wrapper/contract/resultSchema";
 
 const emptyArtifacts: PlaywrightArtifacts = {
   htmlReport: null,

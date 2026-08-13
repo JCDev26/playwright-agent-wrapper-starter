@@ -46,7 +46,7 @@ It is intentionally compact.
     "headed": false,
     "workers": 1
   },
-  "command": "npx playwright test --project smoke tests/smoke/example.spec.ts --workers 1",
+  "command": "npx playwright test --project=smoke tests/smoke/example.spec.ts --workers=1",
   "exitCode": 0,
   "artifacts": {
     "htmlReport": "artifacts/playwright-report/index.html",
@@ -335,7 +335,7 @@ This is not an execution-boundary failure.
 Interpretation:
 
 - the wrapper rejected the request before execution
-- the failure occurred at the trust boundary
+- the failure occurred at the execution / validation boundary
 - this is a policy or input issue, not a test result
 
 ### Execution problem
@@ -344,7 +344,7 @@ Interpretation:
 {
   "ok": false,
   "status": "execution_error",
-  "command": "npx playwright test --project smoke tests/smoke/example.spec.ts",
+  "command": "npx playwright test --project=smoke tests/smoke/example.spec.ts",
   "exitCode": 1
 }
 ```
@@ -357,18 +357,12 @@ Interpretation:
 
 ## Error detail posture
 
-The v1 schema intentionally keeps top-level status small.
+The v1 schema keeps top-level `status` small and already includes structured `error` detail for failure paths:
 
-Richer structured error detail may be added later, such as:
+- `error.code` — validation or execution reason code
+- `error.detail` — human-readable explanation
 
-- validation failure reason codes
-- field-level validation errors
-- execution failure classifications
-- stderr or debug references
-
-Those are reasonable extensions, but they are not required to prove the core pattern.
-
-The stronger v1 choice is to keep top-level semantics stable and understandable.
+Further extensions (field-level validation arrays, stderr references, timestamps) remain optional and are not required to prove the core pattern.
 
 ## Review-oriented interpretation
 
@@ -417,6 +411,6 @@ The stronger design choice in v1 is to keep the schema small, interpretable, and
 
 This result schema is deliberately shaped around reviewability.
 
-It assumes that successful agent-assisted execution is not just about running a command. It is about producing a result that can be trusted, understood, and acted on.
+It assumes that successful externally assisted execution is not just about running a command. It is about producing a result that can be trusted, understood, and acted on.
 
 That is the standard this repository is trying to demonstrate.

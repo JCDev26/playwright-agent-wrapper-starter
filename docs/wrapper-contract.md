@@ -18,9 +18,9 @@ This wrapper contract enforces a narrower model:
 - the wrapper returns a normalized result and artifact references
 - a human or another system can review the outcome without reconstructing raw shell behavior
 
-## Trust boundary
+## Execution boundary
 
-The wrapper is the trust boundary between external reasoning and local execution.
+The wrapper is the execution boundary between external reasoning and local Playwright runs.
 
 That boundary exists to prevent a caller from:
 
@@ -226,7 +226,7 @@ A successful wrapper execution is expected to produce a normalized result with f
     "headed": false,
     "workers": 1
   },
-  "command": "npx playwright test --project smoke tests/smoke/example.spec.ts --workers 1",
+  "command": "npx playwright test --project=smoke tests/smoke/example.spec.ts --workers=1",
   "exitCode": 0,
   "artifacts": {
     "htmlReport": "artifacts/playwright-report/index.html",
@@ -243,6 +243,15 @@ A successful wrapper execution is expected to produce a normalized result with f
 
 The exact result schema is defined separately in `docs/result-schema.md`.
 
+## Output channels
+
+The CLI treats streams deliberately:
+
+- **stdout** — normalized `PlaywrightRunResult` JSON only
+- **stderr** — Playwright human-readable execution output
+
+Machine callers should parse stdout as JSON. Prefer direct CLI invocation or `npm run --silent wrapper:run` so npm's script banner does not contaminate stdout.
+
 ## Design stance
 
-This repository is demonstrating a high-trust execution boundary around Playwright, with explicit policy, normalized output, and review-oriented evidence.
+This repository demonstrates a bounded Playwright execution boundary with explicit request policy, normalized output, and review-oriented evidence. It is not an OS sandbox or enterprise governance platform.

@@ -1,7 +1,6 @@
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
-  testDir: "./tests",
   timeout: 30_000,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -20,6 +19,12 @@ export default defineConfig({
   projects: [
     {
       name: "smoke",
+      testDir: "./tests/smoke",
+      testMatch: /.*\.spec\.ts/,
+    },
+    {
+      name: "unit",
+      testDir: "./tests/unit",
       testMatch: /.*\.spec\.ts/,
     },
   ],

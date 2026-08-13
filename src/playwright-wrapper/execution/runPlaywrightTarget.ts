@@ -8,7 +8,7 @@ import {
   type PlaywrightTargetRequest,
   validateAndNormalizeTarget,
 } from "../contract/validateInputs";
-import { collectPlaywrightArtifacts } from "../observation/playwrightArtifacts";
+import { collectPlaywrightArtifacts } from "../artifacts/playwrightArtifacts";
 import {
   createExecutionErrorResult,
   createFailedResult,

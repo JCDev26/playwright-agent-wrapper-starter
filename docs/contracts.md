@@ -12,7 +12,7 @@ These contracts formalize three things:
 
 ## Why this document exists
 
-The prose docs define the architecture, trust boundary, and review model.
+The prose docs define the architecture, execution boundary, and review model.
 
 This document adds a more formal layer so the contract is easier to:
 
@@ -277,7 +277,7 @@ const result: PlaywrightRunResult = {
     headed: false,
     workers: 1,
   },
-  command: "npx playwright test --project smoke tests/smoke/example.spec.ts --workers 1",
+  command: "npx playwright test --project=smoke tests/smoke/example.spec.ts --workers=1",
   exitCode: 0,
   artifacts: {
     htmlReport: "artifacts/playwright-report/index.html",
@@ -337,7 +337,7 @@ const result: PlaywrightRunResult = {
     headed: false,
     workers: 1,
   },
-  command: "npx playwright test --project smoke tests/smoke/example.spec.ts --workers 1",
+  command: "npx playwright test --project=smoke tests/smoke/example.spec.ts --workers=1",
   exitCode: 1,
   artifacts: {
     htmlReport: "artifacts/playwright-report/index.html",

@@ -1,197 +1,92 @@
 # playwright-agent-wrapper-starter
 
-A public engineering showcase for bounded, reviewable Playwright execution in AI-assisted QA workflows.
+Bounded, reviewable Playwright Test wrapper for external AI-assisted or automated QA callers.
 
-This project demonstrates a practical pattern for placing a governed wrapper layer between an AI system and raw Playwright execution.
+This repository puts a deterministic wrapper between an external caller and raw Playwright execution. The caller may be a human, a script, or an AI system. The wrapper itself contains no LLM, prompt loop, or agent runtime.
 
-The focus is on execution boundaries: validating what can be run, constraining how it is run, capturing evidence, and returning structured results that a human can review.
+## Why this exists
 
-## The problem
+Letting an assistant construct arbitrary `npx playwright ...` commands is a weak operational boundary:
 
-AI-assisted tooling can accelerate QA workflows, but many integrations still rely on a weak operational boundary: letting an assistant run broad terminal commands and hoping the outcome is understandable afterward.
+- execution scope is hard to review
+- flags and paths are easy to over-permit
+- outcomes arrive as raw terminal noise
+- reasoning and execution stay tightly coupled
 
-That approach creates predictable problems:
+This project demonstrates a narrower pattern: accept a typed request, validate it, run only approved Playwright targets, and return a normalized JSON result with artifact references.
 
-- execution scope is too loose
-- inputs are not constrained enough
-- command construction is hard to trust
-- outputs are optimized for machines, not reviewers
-- evidence is scattered across raw tool output
-- reasoning and execution are too tightly coupled
+## What is bounded
 
-The useful idea is real, but the execution boundary is often under-designed.
+The public request surface is intentionally small:
 
-## What this project demonstrates
+| Field | Rule |
+|---|---|
+| `project` | allowlisted (`smoke` in v1) |
+| `spec` | optional; must stay under `tests/**/*.spec.ts` |
+| `grep` | optional; non-empty string, max 200 chars |
+| `headed` | optional boolean |
+| `workers` | optional integer, 1–4 |
 
-This repo uses a narrower and more governable model.
+The wrapper builds argv itself (`shell: false`). Callers do not supply raw command strings.
 
-Instead of exposing arbitrary terminal access, it introduces a small wrapper layer around Playwright execution that is designed to:
-
-- accept a bounded set of allowlisted inputs
-- construct Playwright runs safely from validated arguments
-- normalize execution outcomes into a compact result shape
-- capture artifact references for later inspection
-- support evidence-oriented, human-review-friendly workflows
-- preserve a clean separation between reasoning and execution
-- define formal request and result contracts for implementation and review
-
-The goal is to demonstrate a reusable QA/tooling pattern, not to build a full agent platform.
-
-## Why this matters
-
-There is growing interest in agent-assisted development and QA, but many implementations jump too quickly from “AI can help” to “AI should directly operate the environment.”
-
-A more credible path is:
-
-1. define the execution contract
-2. bound the allowed inputs
-3. normalize what comes back
-4. preserve evidence for review
-5. keep a human in the loop
-
-That design is more reliable in real engineering environments.
-
-## Architectural idea
-
-The core pattern is simple:
-
-- Playwright remains the execution engine
-- a wrapper layer sits in front of it
-- the wrapper validates and shapes the run request
-- the wrapper executes only approved target forms
-- the wrapper returns a normalized result plus artifact references
-
-This creates a cleaner boundary between:
-
-- **reasoning systems** that decide what should be attempted
-- **execution systems** that perform a controlled run
-- **review systems or humans** that inspect the result and evidence
-
-## Layer model
-
-The repository is organized around four layers:
-
-1. **operation contract**
-2. **execution**
-3. **observation**
-4. **reporting**
-
-In the first release:
-
-- **operation contract** is implemented through validation rules, normalized types, and contract docs
-- **execution** is implemented through the bounded Playwright runner and CLI entry point
-- **observation** is implemented through normalized run results, artifact references, and review-oriented summaries
-- **reporting** is minimal in v1; native Playwright reports remain the detailed reporting layer
-
-## First-release shape
-
-The first release stays narrow.
-
-It includes:
-
-- a small Playwright sample project
-- a bounded wrapper function for Playwright execution
-- a CLI entry point for the wrapper
-- validation for a small allowlist of execution inputs
-- safe command construction
-- normalized result output
-- artifact path collection
-- lightweight design documentation for review and teaching
-
-The initial input surface is small:
-
-- `project`
-- optional `spec`
-- optional `grep`
-- optional `headed`
-- optional `workers`
-
-## What this repo is not
-
-This repo is not:
-
-- a prompt library
-- a replacement for Playwright CLI
-- a replacement for Playwright MCP
-- a browser-driving agent framework
-- an autonomous QA system
-- a generic “AI for testing” concept repo
-
-## Public scope
-
-This repository is intentionally public-facing and documentation-forward.
-
-Its role is to showcase:
-
-- architectural thinking
-- execution-boundary design
-- wrapper contracts
-- normalized result design
-- artifact and evidence modeling
-- human-review-oriented workflow design
-
-Some implementation details remain simplified in public form to keep the repo focused, teachable, and appropriate for portfolio use.
-
-## Repository structure
+## How a run works
 
 ```text
-playwright-agent-wrapper-starter/
-├─ README.md
-├─ package.json
-├─ tsconfig.json
-├─ playwright.config.ts
-├─ tests/
-│  ├─ smoke/
-│  │  └─ example.spec.ts
-│  └─ unit/
-│     └─ validateInputs.spec.ts
-├─ tools/
-│  └─ agent/
-│     ├─ contract/
-│     │  ├─ validateInputs.ts
-│     │  └─ resultSchema.ts
-│     ├─ execution/
-│     │  ├─ runPlaywrightTarget.ts
-│     │  └─ runPlaywrightTargetCli.ts
-│     ├─ observation/
-│     │  └─ playwrightArtifacts.ts
-│     └─ reporting/
-│        └─ .gitkeep
-├─ docs/
-│  ├─ architecture.md
-│  ├─ contracts.md
-│  ├─ wrapper-contract.md
-│  ├─ result-schema.md
-│  ├─ artifact-model.md
-│  └─ human-review-model.md
-└─ .gitignore
+External caller
+Human / AI / automation
+        |
+        v
+  Bounded request
+        |
+        v
+  Input validation
+        |
+        v
+  Playwright wrapper
+        |
+        v
+  Playwright Test
+        |
+        v
+  Native artifacts
+        |
+        v
+  Normalized JSON result
 ```
 
-## Structure notes
+- **stdout** carries only the normalized JSON result
+- **stderr** carries Playwright's human-readable run output
+- native HTML/JSON/JUnit reports remain under `artifacts/`
 
-This structure is intentionally small and layered.
+## Quick Start
 
-- `tests/` contains the sample Playwright suite and targeted validation tests.
-- `tools/agent/contract/` contains input validation and normalized result definitions.
-- `tools/agent/execution/` contains the bounded runner and CLI entry point.
-- `tools/agent/observation/` contains artifact collection for review-oriented outputs.
-- `tools/agent/reporting/` makes the fourth layer visible, while detailed reporting remains deferred in v1.
-- `docs/` explains the architectural model, contracts, schema, evidence handling, and review workflow.
+**Node.js:** `>=18` (see `.nvmrc` / `package.json` `engines`)
 
-## Wrapper contract preview
-
-Example input:
-
-```json
-{
-  "project": "smoke",
-  "spec": "tests/smoke/example.spec.ts",
-  "headed": false,
-  "workers": 1
-}
+```bash
+npm ci
+npm run typecheck
+npm test
 ```
 
-Example result:
+This sample suite does not launch browsers, so no `playwright install` step is required for the default tests.
+
+### Run the wrapper (developer-friendly)
+
+```bash
+npm run --silent wrapper:run -- --project smoke --spec tests/smoke/example.spec.ts --workers 1
+```
+
+`--silent` avoids npm's script banner so stdout stays pure JSON.
+
+### Run the wrapper (machine-friendly)
+
+Prefer invoking the CLI entrypoint directly when another system will parse stdout:
+
+```bash
+node node_modules/tsx/dist/cli.mjs src/playwright-wrapper/execution/runPlaywrightTargetCli.ts --project smoke --spec tests/smoke/example.spec.ts --workers 1
+```
+
+### Expected success shape
 
 ```json
 {
@@ -219,41 +114,51 @@ Example result:
 }
 ```
 
-The public contract is defined in both prose and formal TypeScript form.
+Exit codes: `0` passed, `1` tests failed (wrapper still completed), `2` validation/execution/CLI error.
 
-The prose docs explain the architectural boundary and review model. The contracts doc defines the request, result, artifact, and status shapes more explicitly so the wrapper can be implemented and tested against a stable interface.
+### Useful checks
 
-## Design principles
+```bash
+# smoke target only (what the wrapper allowlists)
+npm run test:smoke
 
-This repo is shaped around a few explicit principles:
+# wrapper unit/boundary tests only
+npm run test:unit
 
-- bounded execution is more credible than arbitrary command access
-- validation should happen before invocation
-- execution output should be normalized for review
-- artifact references should be first-class
-- reasoning and execution should remain separate concerns
-- human review should remain part of the model
+# rejected request stays honest and does not spawn Playwright
+npm run --silent wrapper:run -- --project ui
+```
 
-## Explicitly out of scope for v1
+## What this is / is not
 
-To keep the first release believable, the following are out of scope:
+**Is:** a concrete Playwright execution-boundary demo — validation, safe argv construction, normalized results, artifact references.
 
-- browser-driving agent workflows
-- custom MCP server implementation
-- autonomous orchestration loops
-- test generation or self-healing
-- Slack, Jira, or GitHub automation
-- dashboards and telemetry platforms
-- enterprise approval systems
-- distributed execution infrastructure
+**Is not:** an LLM client, MCP server, autonomous QA agent, multi-agent system, prompt library, or generic command runner.
 
-## Status
+AI assistance is external. Separating intent from execution is the point.
 
-This project is in the first public implementation phase.
+## Repository structure
 
-The current version demonstrates:
+```text
+src/playwright-wrapper/
+  contract/      # request validation + result types
+  execution/     # runner + CLI
+  artifacts/     # Playwright artifact path collection
+tests/
+  smoke/         # allowlisted demo target for the wrapper
+  unit/          # wrapper boundary/unit tests
+docs/            # contracts and design notes
+```
 
-- contract-layer validation
-- execution-layer target running
-- observation-layer artifact and result capture
-- minimal reporting posture built on native Playwright outputs
+## Deeper docs
+
+- [Architecture](docs/architecture.md)
+- [Contracts](docs/contracts.md)
+- [Wrapper contract](docs/wrapper-contract.md)
+- [Result schema](docs/result-schema.md)
+- [Artifact model](docs/artifact-model.md)
+- [Human review model](docs/human-review-model.md)
+
+## Out of scope for v1
+
+Browser-driving agents, MCP, orchestration loops, test generation/self-healing, dashboards, enterprise approval systems, and distributed execution infrastructure.

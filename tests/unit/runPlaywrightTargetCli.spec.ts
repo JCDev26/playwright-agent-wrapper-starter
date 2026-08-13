@@ -4,8 +4,8 @@ import { test, expect } from "@playwright/test";
 
 const cliEntry = path.join(
   process.cwd(),
-  "tools",
-  "agent",
+  "src",
+  "playwright-wrapper",
   "execution",
   "runPlaywrightTargetCli.ts",
 );
