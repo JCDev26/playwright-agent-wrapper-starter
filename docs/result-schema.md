@@ -178,9 +178,9 @@ This keeps the model simple and internally consistent.
 
 Type: object
 
-This field is a normalized echo of the accepted request.
+This field is an echo of the request as interpreted by the wrapper (`PlaywrightTargetEcho`).
 
-Its purpose is to preserve exactly what the wrapper believed it was asked to run.
+Its purpose is to preserve what the wrapper believed it was asked to run — including rejected values when validation fails.
 
 Expected v1 fields:
 
@@ -190,9 +190,11 @@ Expected v1 fields:
 - `headed`
 - `workers`
 
-This matters because the target is the approved request shape, while the command is the derived invocation. Those should be related, but not conceptually merged.
+On `validation_error`, `project` must echo the caller-supplied value when it was a string. Rejected project names must not be rewritten to an allowlisted default such as `"smoke"`.
 
-For v1, the stronger default is to always include a normalized target in the result so the review shape remains stable.
+This matters because the target is the request echo, while the command is the derived invocation. Those should be related, but not conceptually merged.
+
+For v1, the stronger default is to always include a target echo in the result so the review shape remains stable.
 
 ### `command`
 

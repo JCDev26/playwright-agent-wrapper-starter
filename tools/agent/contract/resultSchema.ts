@@ -1,4 +1,4 @@
-import type { NormalizedPlaywrightTarget } from "./validateInputs";
+import type { PlaywrightTargetEcho } from "./validateInputs";
 
 export interface PlaywrightArtifacts {
   htmlReport: string | null;
@@ -36,7 +36,7 @@ export interface PlaywrightRunError {
 export interface PlaywrightRunResult {
   ok: boolean;
   status: PlaywrightRunStatus;
-  target: NormalizedPlaywrightTarget;
+  target: PlaywrightTargetEcho;
   command: string | null;
   exitCode: number | null;
   artifacts: PlaywrightArtifacts;
@@ -45,7 +45,7 @@ export interface PlaywrightRunResult {
 }
 
 export function createPassedResult(params: {
-  target: NormalizedPlaywrightTarget;
+  target: PlaywrightTargetEcho;
   command: string;
   exitCode: number;
   artifacts: PlaywrightArtifacts;
@@ -65,7 +65,7 @@ export function createPassedResult(params: {
 }
 
 export function createFailedResult(params: {
-  target: NormalizedPlaywrightTarget;
+  target: PlaywrightTargetEcho;
   command: string;
   exitCode: number;
   artifacts: PlaywrightArtifacts;
@@ -85,7 +85,7 @@ export function createFailedResult(params: {
 }
 
 export function createValidationErrorResult(params: {
-  target: NormalizedPlaywrightTarget;
+  target: PlaywrightTargetEcho;
   artifacts: PlaywrightArtifacts;
   code: PlaywrightRunErrorCode;
   detail: string;
@@ -109,7 +109,7 @@ export function createValidationErrorResult(params: {
 }
 
 export function createExecutionErrorResult(params: {
-  target: NormalizedPlaywrightTarget;
+  target: PlaywrightTargetEcho;
   command: string | null;
   exitCode: number | null;
   artifacts: PlaywrightArtifacts;

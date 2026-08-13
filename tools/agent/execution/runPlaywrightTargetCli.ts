@@ -16,7 +16,7 @@ function parseArgs(argv: string[]): PlaywrightTargetRequest {
     const arg = argv[index];
 
     if (arg === "--project") {
-      request.project = requireValue("--project", argv[index + 1]) as PlaywrightTargetRequest["project"];
+      request.project = requireValue("--project", argv[index + 1]);
       index += 1;
       continue;
     }

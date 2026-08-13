@@ -58,13 +58,13 @@ test.describe("validateAndNormalizeTarget", () => {
   test("rejects an unknown project", async () => {
     expect(() =>
       validateAndNormalizeTarget({
-        project: "ui" as never,
+        project: "ui",
       }),
     ).toThrowError(InputValidationError);
 
     expect(() =>
       validateAndNormalizeTarget({
-        project: "ui" as never,
+        project: "ui",
       }),
     ).toThrow(/Project must be one of/);
   });

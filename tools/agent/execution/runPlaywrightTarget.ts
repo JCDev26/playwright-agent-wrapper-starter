@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   InputValidationError,
   type NormalizedPlaywrightTarget,
+  type PlaywrightTargetEcho,
   type PlaywrightTargetRequest,
   validateAndNormalizeTarget,
 } from "../contract/validateInputs";
@@ -13,8 +14,35 @@ import {
   createFailedResult,
   createPassedResult,
   createValidationErrorResult,
+  type PlaywrightArtifacts,
   type PlaywrightRunResult,
 } from "../contract/resultSchema";
+
+/**
+ * Minimal spawn seam for tests. Production uses node:child_process.spawnSync.
+ * Child stdout/stderr must not write to the parent stdout channel.
+ */
+export type PlaywrightSpawnSync = (
+  command: string,
+  args: readonly string[],
+  options: {
+    shell: false;
+    /**
+     * ignore stdin; route child stdout+stderr to parent stderr (fd 2)
+     * so parent stdout remains a clean JSON result channel for the CLI.
+     */
+    stdio: ["ignore", 2, 2];
+  },
+) => {
+  status: number | null;
+  error?: Error;
+};
+
+export interface RunPlaywrightTargetDeps {
+  spawnSync?: PlaywrightSpawnSync;
+  resolveCliScriptPath?: () => string;
+  collectArtifacts?: () => PlaywrightArtifacts;
+}
 
 function buildPlaywrightCliArgs(target: NormalizedPlaywrightTarget): string[] {
   const args = ["test", `--project=${target.project}`];
@@ -42,13 +70,22 @@ function buildCommandString(cliArgs: string[]): string {
   return ["npx", "playwright", ...cliArgs].join(" ");
 }
 
-function fallbackNormalizedTarget(input: Partial<PlaywrightTargetRequest>): NormalizedPlaywrightTarget {
+/**
+ * Echo the caller's request fields without coercing rejected values into
+ * allowlisted defaults (e.g. do not rewrite an invalid project to "smoke").
+ */
+export function echoRejectedTarget(
+  input: Partial<PlaywrightTargetRequest>,
+): PlaywrightTargetEcho {
   return {
-    project: input.project === "smoke" ? "smoke" : "smoke",
+    project: typeof input.project === "string" ? input.project : "",
     spec: typeof input.spec === "string" ? input.spec : null,
     grep: typeof input.grep === "string" ? input.grep : null,
     headed: typeof input.headed === "boolean" ? input.headed : false,
-    workers: typeof input.workers === "number" && Number.isInteger(input.workers) ? input.workers : null,
+    workers:
+      typeof input.workers === "number" && Number.isInteger(input.workers)
+        ? input.workers
+        : null,
   };
 }
 
@@ -62,17 +99,24 @@ function resolvePlaywrightCliScriptPath(): string {
   return cliPath;
 }
 
-export function runPlaywrightTarget(input: PlaywrightTargetRequest): PlaywrightRunResult {
+export function runPlaywrightTarget(
+  input: PlaywrightTargetRequest,
+  deps: RunPlaywrightTargetDeps = {},
+): PlaywrightRunResult {
+  const spawn = deps.spawnSync ?? (spawnSync as PlaywrightSpawnSync);
+  const resolveCli = deps.resolveCliScriptPath ?? resolvePlaywrightCliScriptPath;
+  const collectArtifacts = deps.collectArtifacts ?? collectPlaywrightArtifacts;
+
   let target: NormalizedPlaywrightTarget;
 
   try {
     target = validateAndNormalizeTarget(input);
   } catch (error) {
-    const artifacts = collectPlaywrightArtifacts();
+    const artifacts = collectArtifacts();
 
     if (error instanceof InputValidationError) {
       return createValidationErrorResult({
-        target: fallbackNormalizedTarget(input),
+        target: echoRejectedTarget(input),
         artifacts,
         code: error.code,
         detail: error.message,
@@ -80,7 +124,7 @@ export function runPlaywrightTarget(input: PlaywrightTargetRequest): PlaywrightR
     }
 
     return createValidationErrorResult({
-      target: fallbackNormalizedTarget(input),
+      target: echoRejectedTarget(input),
       artifacts,
       code: "INVALID_PROJECT",
       detail: error instanceof Error ? error.message : "Unknown validation error.",
@@ -92,13 +136,13 @@ export function runPlaywrightTarget(input: PlaywrightTargetRequest): PlaywrightR
 
   try {
     cliArgs = buildPlaywrightCliArgs(target);
-    cliScriptPath = resolvePlaywrightCliScriptPath();
+    cliScriptPath = resolveCli();
   } catch (error) {
     return createExecutionErrorResult({
       target,
       command: null,
       exitCode: null,
-      artifacts: collectPlaywrightArtifacts(),
+      artifacts: collectArtifacts(),
       code: "COMMAND_CONSTRUCTION_FAILED",
       detail: error instanceof Error ? error.message : "Failed to construct Playwright command.",
     });
@@ -106,12 +150,14 @@ export function runPlaywrightTarget(input: PlaywrightTargetRequest): PlaywrightR
 
   const command = buildCommandString(cliArgs);
 
-  const result = spawnSync(process.execPath, [cliScriptPath, ...cliArgs], {
-    stdio: "inherit",
+  // Keep parent stdout free for the CLI JSON result. Playwright's human-readable
+  // reporter output is routed to the parent stderr stream via fd 2.
+  const result = spawn(process.execPath, [cliScriptPath, ...cliArgs], {
+    stdio: ["ignore", 2, 2],
     shell: false,
   });
 
-  const artifacts = collectPlaywrightArtifacts();
+  const artifacts = collectArtifacts();
 
   if (result.error) {
     return createExecutionErrorResult({

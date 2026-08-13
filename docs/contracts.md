@@ -31,7 +31,7 @@ export type PlaywrightProjectName = "smoke";
 
 ```ts
 export interface PlaywrightTargetRequest {
-  project: PlaywrightProjectName;
+  project: string;
   spec?: string;
   grep?: string;
   headed?: boolean;
@@ -39,6 +39,7 @@ export interface PlaywrightTargetRequest {
 }
 ```
 
+`project` is validated against the allowlisted `PlaywrightProjectName` set before execution.
 ## Artifact contract
 
 ```ts
@@ -92,6 +93,18 @@ export interface NormalizedPlaywrightTarget {
 }
 ```
 
+```ts
+export interface PlaywrightTargetEcho {
+  project: string;
+  spec: string | null;
+  grep: string | null;
+  headed: boolean;
+  workers: number | null;
+}
+```
+
+`NormalizedPlaywrightTarget` is the approved target after successful validation.
+`PlaywrightTargetEcho` is what appears in result `target` and may echo rejected caller values on `validation_error`.
 ## Status contract
 
 ```ts
@@ -108,7 +121,7 @@ export type PlaywrightRunStatus =
 export interface PlaywrightRunResult {
   ok: boolean;
   status: PlaywrightRunStatus;
-  target: NormalizedPlaywrightTarget;
+  target: PlaywrightTargetEcho;
   command: string | null;
   exitCode: number | null;
   artifacts: PlaywrightArtifacts;
@@ -121,9 +134,10 @@ export interface PlaywrightRunResult {
 
 ### `project`
 
-- `project` is an allowlisted value, not an arbitrary string
+- `project` on the request is a string validated against an explicit allowlist before execution
 - for v1, the documented public sample allowlist is intentionally small
-- if more Playwright projects are introduced later, the union type should expand deliberately
+- if more Playwright projects are introduced later, the allowlist and `PlaywrightProjectName` union should expand deliberately
+- on `validation_error`, result `target.project` echoes the caller-supplied string when present and must not coerce a rejected project name into an allowlisted value such as `"smoke"`
 
 ### `spec`
 
@@ -178,10 +192,12 @@ ok: false + status: "failed"
 ### `target`
 
 - `target` is always present in the result
-- `target` is the normalized echo of the request as interpreted by the wrapper
-- optional request fields are normalized into explicit values
+- `target` is the echo of the request as interpreted by the wrapper (`PlaywrightTargetEcho`)
+- on successful validation and execution, `target` matches the approved normalized target
+- on `validation_error`, `target` preserves an honest representation of the rejected request fields (including rejected `project` values) rather than substituting allowlisted defaults
+- optional request fields are normalized into explicit values when validation proceeds far enough to interpret them; otherwise string fields are echoed as provided when present
 
-Normalized defaults for v1 are:
+Normalized defaults for successful validation in v1 are:
 
 - `spec` becomes `null` when omitted
 - `grep` becomes `null` when omitted

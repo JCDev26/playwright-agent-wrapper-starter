@@ -3,15 +3,32 @@ import path from "node:path";
 export type PlaywrightProjectName = "smoke";
 
 export interface PlaywrightTargetRequest {
-  project: PlaywrightProjectName;
+  /**
+   * Must match an allowlisted Playwright project name.
+   * Typed as string so rejected values can be validated and echoed honestly.
+   */
+  project: string;
   spec?: string;
   grep?: string;
   headed?: boolean;
   workers?: number;
 }
 
+/** Approved target after successful validation. */
 export interface NormalizedPlaywrightTarget {
   project: PlaywrightProjectName;
+  spec: string | null;
+  grep: string | null;
+  headed: boolean;
+  workers: number | null;
+}
+
+/**
+ * Result echo of the request as interpreted by the wrapper.
+ * On validation_error, `project` may contain a rejected caller-supplied value.
+ */
+export interface PlaywrightTargetEcho {
+  project: string;
   spec: string | null;
   grep: string | null;
   headed: boolean;
