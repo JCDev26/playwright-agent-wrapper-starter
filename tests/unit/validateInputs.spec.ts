@@ -164,3 +164,9 @@ test.describe("validateAndNormalizeTarget", () => {
     ).toThrow(/between 1 and 4/);
   });
 });
+
+for (const spec of ["tests/smoke/../example.spec.ts", "C:\\tests\\a.spec.ts", "/tests/a.spec.ts", "\\\\server\\tests\\a.spec.ts"]) {
+  test(`rejects traversal or absolute paths on every platform: ${spec}`, () => {
+    expect(() => validateAndNormalizeTarget({ project: "smoke", spec })).toThrowError(InputValidationError);
+  });
+}

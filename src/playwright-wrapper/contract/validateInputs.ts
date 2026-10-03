@@ -72,15 +72,22 @@ function normalizeSpec(spec: unknown): string | null {
   }
 
   const trimmed = spec.trim();
+  if (trimmed.includes("\0")) {
+    throw new InputValidationError("INVALID_SPEC", "Spec must not contain NUL characters.");
+  }
   if (!trimmed) {
     throw new InputValidationError("INVALID_SPEC", "Spec must not be empty.");
   }
 
-  if (path.isAbsolute(trimmed)) {
+  if (path.posix.isAbsolute(trimmed) || path.win32.isAbsolute(trimmed)) {
     throw new InputValidationError("INVALID_SPEC", "Spec path must be repo-relative, not absolute.");
   }
 
-  const normalized = path.posix.normalize(trimmed.replaceAll("\\", "/"));
+  const slashed = trimmed.replaceAll("\\", "/");
+  if (slashed.split("/").includes("..")) {
+    throw new InputValidationError("INVALID_SPEC", "Spec path must not use parent-directory traversal.");
+  }
+  const normalized = path.posix.normalize(slashed);
 
   if (normalized.startsWith("../") || normalized === "..") {
     throw new InputValidationError("INVALID_SPEC", "Spec path must not use parent-directory traversal.");
@@ -107,6 +114,9 @@ function normalizeGrep(grep: unknown): string | null {
   }
 
   const trimmed = grep.trim();
+  if (trimmed.includes("\0")) {
+    throw new InputValidationError("INVALID_GREP", "Grep must not contain NUL characters.");
+  }
   if (!trimmed) {
     throw new InputValidationError("INVALID_GREP", "Grep must not be empty.");
   }

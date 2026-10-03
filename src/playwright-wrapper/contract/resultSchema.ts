@@ -26,7 +26,8 @@ export type PlaywrightRunErrorCode =
   | "INVALID_WORKERS"
   | "COMMAND_CONSTRUCTION_FAILED"
   | "PROCESS_LAUNCH_FAILED"
-  | "PROCESS_COMPLETION_FAILED";
+  | "PROCESS_COMPLETION_FAILED"
+  | "TEST_JUDGMENT_UNAVAILABLE";
 
 export interface PlaywrightRunError {
   code: PlaywrightRunErrorCode;
@@ -124,7 +125,7 @@ export function createExecutionErrorResult(params: {
     exitCode: params.exitCode,
     artifacts: params.artifacts,
     summary: {
-      message: "Playwright execution did not complete normally.",
+      message: "Playwright did not produce a trustworthy completed test judgment.",
       nextReviewPoint: "Inspect execution context and available artifacts.",
     },
     error: {
