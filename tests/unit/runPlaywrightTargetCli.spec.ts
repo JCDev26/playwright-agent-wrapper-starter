@@ -1,28 +1,9 @@
-import { spawnSync } from "node:child_process";
-import path from "node:path";
 import { test, expect } from "@playwright/test";
-
-const cliEntry = path.join(
-  process.cwd(),
-  "src",
-  "playwright-wrapper",
-  "execution",
-  "runPlaywrightTargetCli.ts",
-);
-
-const tsxCli = path.join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs");
-
-function runWrapperCli(args: string[]) {
-  return spawnSync(process.execPath, [tsxCli, cliEntry, ...args], {
-    encoding: "utf8",
-    shell: false,
-    env: process.env,
-  });
-}
+import { wrapperFixture } from "../support/wrapperFixture";
 
 test.describe("runPlaywrightTargetCli machine output", () => {
-  test("stdout is parseable JSON for validation_error and echoes rejected project", async () => {
-    const result = runWrapperCli(["--project", "ui"]);
+  test("stdout is parseable JSON for validation_error and echoes rejected project", async ({}, info) => {
+    const result = wrapperFixture(info).run(["--project", "ui"]);
 
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(2);
@@ -49,8 +30,8 @@ test.describe("runPlaywrightTargetCli machine output", () => {
     expect(result.stdout.trim().endsWith("}")).toBe(true);
   });
 
-  test("stdout remains parseable JSON when Playwright runs (no child stdout contamination)", async () => {
-    const result = runWrapperCli([
+  test("stdout remains parseable JSON when Playwright runs (no child stdout contamination)", async ({}, info) => {
+    const result = wrapperFixture(info).run([
       "--project",
       "smoke",
       "--spec",
