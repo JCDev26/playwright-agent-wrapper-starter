@@ -22,12 +22,14 @@ The public request surface is intentionally small:
 | Field | Rule |
 |---|---|
 | `project` | allowlisted (`smoke` in v1) |
-| `spec` | optional; must stay under `tests/**/*.spec.ts` |
-| `grep` | optional; non-empty string, max 200 chars |
+| `spec` | optional literal repo-relative `.spec.ts` path under `tests/`; no absolute paths, parent traversal, or NUL |
+| `grep` | optional Playwright regex string; non-empty, max 200 chars, no NUL |
 | `headed` | optional boolean |
 | `workers` | optional integer, 1–4 |
 
 The wrapper builds argv itself (`shell: false`). Callers do not supply raw command strings.
+
+Spec paths are escaped and anchored before Playwright interprets its file filter. Regex metacharacters cannot broaden a spec selection. Missing/nonmatching specs produce an execution error. Omitted workers inherit Playwright configuration/defaults; 1–4 bounds only explicit requests.
 
 ## How a run works
 
@@ -54,9 +56,11 @@ Human / AI / automation
   Normalized JSON result
 ```
 
-- **stdout** carries only the normalized JSON result
+- **stdout** carries the normalized JSON result for requests reaching the wrapper
 - **stderr** carries Playwright's human-readable run output
 - native HTML/JSON/JUnit reports remain under `artifacts/`
+
+CLI syntax errors (unknown flags or missing arguments) are outside the wrapper-result contract: empty stdout, diagnostic stderr, exit 2.
 
 ## Quick Start
 
@@ -86,7 +90,7 @@ Prefer invoking the CLI entrypoint directly when another system will parse stdou
 node node_modules/tsx/dist/cli.mjs src/playwright-wrapper/execution/runPlaywrightTargetCli.ts --project smoke --spec tests/smoke/example.spec.ts --workers 1
 ```
 
-### Expected success shape
+### Example success shape (project-only request)
 
 ```json
 {
@@ -94,16 +98,16 @@ node node_modules/tsx/dist/cli.mjs src/playwright-wrapper/execution/runPlaywrigh
   "status": "passed",
   "target": {
     "project": "smoke",
-    "spec": "tests/smoke/example.spec.ts",
+    "spec": null,
     "grep": null,
     "headed": false,
     "workers": 1
   },
-  "command": "npx playwright test --project=smoke tests/smoke/example.spec.ts --workers=1",
+  "command": "npx playwright test --project=smoke --workers=1",
   "exitCode": 0,
   "artifacts": {
     "htmlReport": "artifacts/playwright-report/index.html",
-    "testResultsJson": "artifacts/test-results.json",
+    "testResultsJson": "artifacts/wrapper-result-<suffix>/results.json",
     "testResultsXml": "artifacts/test-results.xml",
     "traceFiles": []
   },
@@ -114,7 +118,20 @@ node node_modules/tsx/dist/cli.mjs src/playwright-wrapper/execution/runPlaywrigh
 }
 ```
 
-Exit codes: `0` passed, `1` tests failed (wrapper still completed), `2` validation/execution/CLI error.
+The generated `<suffix>` isolates this invocation's native JSON result. `command` is a display string; the actual child is Node plus the local Playwright CLI. With a spec, the display contains an escaped absolute-file filter.
+
+### Outcome meanings
+
+- `validation_error` / `ok: false`: rejected before Playwright execution.
+- `passed` / `ok: true`: current-run results establish completed test attempts and an accepted Playwright outcome.
+- `failed` / `ok: true`: current-run results establish completed test attempts and unexpected Playwright test outcomes.
+- `execution_error` / `ok: false`: no trustworthy completed test judgment, including no tests, all skipped, discovery/configuration errors, abnormal completion, or missing/unusable current-run JSON.
+
+Playwright's expected-failure and retry rules apply. These outcomes do not certify broader product correctness. Child exit 0/1 alone never establishes passed/failed.
+
+CLI exit codes: `0` passed, `1` failed, `2` validation/execution/parser error. The result's `exitCode` is the observed child code; null means no numeric code was obtained, not necessarily that no process launched.
+
+Only the fresh `testResultsJson` has current-invocation attribution. HTML/JUnit/trace paths merely indicate filesystem presence and may be older or overwritten. Ancillary scanning failures degrade those references without replacing the primary result. See [artifact semantics](docs/artifact-model.md).
 
 ### Useful checks
 
@@ -162,3 +179,5 @@ docs/            # contracts and design notes
 ## Out of scope for v1
 
 Browser-driving agents, MCP, orchestration loops, test generation/self-healing, dashboards, enterprise approval systems, and distributed execution infrastructure.
+
+V1 stops at the bounded wrapper and its hardened contracts. Review points are guidance, not mandatory human approval gates.

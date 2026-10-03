@@ -1,74 +1,44 @@
 # Architecture
 
-This repository demonstrates a small, deterministic wrapper around Playwright Test.
-
-An external caller — human, script, or AI system — submits a narrow request. The wrapper validates that request, constructs an approved Playwright invocation, runs it, and returns a normalized JSON result with artifact references.
-
-The wrapper does not include an LLM, prompt loop, MCP server, or agent runtime. Keeping reasoning outside the execution path is intentional.
-
-## Flow
+This repository implements one bounded Playwright Test execution responsibility. AI reasoning remains external.
 
 ```text
-External caller
-Human / AI / automation
-        |
-        v
-  Bounded request
-        |
-        v
-  Input validation   (src/playwright-wrapper/contract)
-        |
-        v
-  Playwright wrapper (src/playwright-wrapper/execution)
-        |
-        v
-  Playwright Test
-        |
-        v
-  Native artifacts   (surfaced by src/playwright-wrapper/artifacts)
-        |
-        v
-  Normalized JSON result
+External human / script / AI caller
+  -> request validation
+  -> literal target and argv construction
+  -> fresh native JSON result destination
+  -> local Playwright child process
+  -> native result inspection + best-effort artifact discovery
+  -> normalized JSON result
 ```
 
-## Source layout
+## Responsibilities
 
-| Path | Responsibility |
-|---|---|
-| `src/playwright-wrapper/contract/` | Request validation and result types |
-| `src/playwright-wrapper/execution/` | Bounded runner and CLI |
-| `src/playwright-wrapper/artifacts/` | Presence checks for known Playwright artifact paths |
-| `tests/smoke/` | Allowlisted demo target (`project: smoke`) |
-| `tests/unit/` | Wrapper boundary and validation tests |
+- `contract/validateInputs.ts`: request types, normalization, fixed input policy.
+- `contract/resultSchema.ts`: result types and constructors.
+- `execution/runPlaywrightTarget.ts`: invocation boundary, process handling, current-run report destination, terminal result.
+- `execution/playwrightJudgment.ts`: small Playwright-specific projection of native JSON errors, outcomes, attempts, and totals.
+- `execution/runPlaywrightTargetCli.ts`: argument parsing, JSON output and CLI exit mapping.
+- `artifacts/playwrightArtifacts.ts`: presence checks for shared native report/trace paths.
 
-Native Playwright HTML/JSON/JUnit output remains the detailed reporting surface. This repository does not implement a separate reporting product.
+## Boundaries
 
-## Boundaries that matter
+Callers supply fields, not raw commands. Validated spec paths become escaped literal-file filters; grep remains a discrete Playwright regex argument. The child is Node plus the installed Playwright CLI with `shell: false`.
 
-1. **Request vs command** — callers supply a request object; the shell command is derived internally from validated fields (`shell: false`, argv array).
-2. **Validation vs execution** — invalid requests fail before Playwright is spawned.
-3. **Wrapper outcome vs test outcome** — `ok` describes wrapper completion; `status: "failed"` can still mean `ok: true` when tests fail normally.
-4. **stdout vs stderr** — CLI stdout is the JSON result channel; Playwright human output goes to stderr.
+Rejected inputs never reach spawning. Passed/failed require current-run native test evidence consistent with the child exit code. No-tests/discovery failures cannot become failed-test judgments. Synchronous launch exceptions are structured; optional artifact scanning cannot replace the primary outcome.
 
-## What "bounded" means here
+The JSON reporter writes into a fresh invocation-specific directory solely to prevent stale or overlapping machine reports from determining a verdict. Other report paths remain shared/presence-based. See [artifact model](artifact-model.md).
 
-Bounded refers to the enforced request/execution surface:
+CLI syntax failures deliberately remain outside the JSON wrapper-result contract. Human-readable child output uses stderr.
 
-- allowlisted `project`
-- repo-relative `spec` under `tests/**/*.spec.ts`
-- constrained `grep`, `headed`, and `workers`
-- no raw command-string API
+## Trust and scope
 
-It does not claim OS sandboxing, network isolation, or enterprise governance.
+Repository code, configuration, dependencies, the local account, and inherited environment are trusted. The request boundary is not OS/network isolation. Explicit worker values are bounded to 1–4; omitted values inherit Playwright defaults.
 
-## Non-goals
+There is no LLM, agent runtime, contributor registry, workflow engine, generic evaluator, approval gate, protocol adapter, or historical evidence service. Native reports and external human judgment remain the review surface.
 
-Arbitrary command execution, browser-driving agent orchestration, MCP infrastructure, autonomous multi-step planning, dashboards, and telemetry platforms.
+## V1 stop point
 
-## Related docs
+The final hardening pass ends at truthful result classification, literal spec selection, structured exception handling, directly related regressions, and accurate documentation. Optional run-management features are not part of v1.
 
-- [Contracts](contracts.md) — request/result TypeScript shapes
-- [Wrapper contract](wrapper-contract.md) — execution boundary rules
-- [Result schema](result-schema.md) — outcome semantics
-- [Artifact model](artifact-model.md) — evidence references
-- [Human review model](human-review-model.md) — how to read a result
+See [contracts](contracts.md), [wrapper contract](wrapper-contract.md), [result schema](result-schema.md), and [review guidance](human-review-model.md).
