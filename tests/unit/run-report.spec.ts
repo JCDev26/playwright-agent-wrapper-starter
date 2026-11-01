@@ -15,7 +15,7 @@ test("failure takes precedence over missing evidence and acceptance stays separa
   ]);
   expect(report.technical).toBe("failed");
   expect(report.ownerApproval).toBe("pending");
-  expect(report.visual).toBe("review-required");
+  expect(report.visual).toBe("unknown");
 });
 test("provenance is required and report snapshots cannot be changed by later array edits", () => {
   expect(() => createRunReport({ ...context, commit: "HEAD" }, [])).toThrow();
@@ -27,4 +27,15 @@ test("provenance is required and report snapshots cannot be changed by later arr
   expect(report.checks[0]?.evidence).toEqual(["run-1.json"]);
   expect(report.technical).toBe("passed");
   expect(report.ownerApproval).toBe("pending");
+});
+
+test("visual applicability is an explicit composition choice, independent of technical success", () => {
+  const checks = [{ name: "backend", status: "passed" as const, evidence: [] }];
+  expect(createRunReport(context, checks).visual).toBe("unknown");
+  expect(createRunReport(context, checks, { applicability: "applicable" }).visual).toBe("review-required");
+  const report = createRunReport(context, checks, { applicability: "not-applicable", rationale: "Pure backend validation; no visual output is produced." });
+  expect(report.visual).toBe("not-applicable");
+  expect(report.visualApplicability.rationale).toContain("backend");
+  expect(report.ownerApproval).toBe("pending");
+  expect(() => createRunReport(context, checks, { applicability: "not-applicable" })).toThrow();
 });

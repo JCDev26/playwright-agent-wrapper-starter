@@ -1,10 +1,14 @@
 # Run evidence contract v1
 
-A portable observation format, not an orchestration service or an authorization mechanism.
+A shared observation vocabulary, not a universal runtime schema, orchestration service, or authorization mechanism.
+
+The adapters in src/reporting are optional library utilities exercised by tests. The existing wrapper CLI still emits its native result, and CI retains native Playwright reports. No universal CLI/CI envelope or approval enforcement is installed.
 Keep each repository independently runnable; do not add cross-repository runtime imports.
 
 - `schemaVersion`: `1`; `taskId`: stable task/run identifier.
-- `repository`: `owner/name`; `commit`: full tested Git SHA (never an untested current head).
+- `repository`: `owner/name`; source revision/attribution must be qualified by the producer.
+  Optional library adapters require caller-supplied context; they do not verify source identity.
+  Native runners may leave `commit` null when attribution or binary correspondence is unverified.
 - `environment`: platform, tool versions and relevant capabilities. Distinguish hosted
   headless, local engine, graphical session, and human/device review.
 - `observedAt`: UTC ISO timestamp of this observation.
@@ -12,14 +16,16 @@ Keep each repository independently runnable; do not add cross-repository runtime
   optional duration in milliseconds, and evidence paths/URLs from this invocation.
 - `technical`: `failed` if any check failed; otherwise `inconclusive` if the check
   set is empty or any check is unavailable/not run; otherwise `passed`.
-- `visual`: `review-required`, `not-applicable`, `passed`, `failed`, or `inconclusive`.
+- `visual`: `unknown`, `review-required`, `not-applicable`, `passed`, `failed`, or `inconclusive`.
 - `ownerApproval`: `pending`, `approved`, `rejected`, or `not-required`.
 
 Technical success never implies visual acceptance or owner approval. Approval metadata
 is informational: an agent-editable report must never authorize publishing or merging.
-Any real human approval must be independently controlled and bound to the reviewed revision.
-Default reports to visual `review-required` and owner approval `pending`; explicitly mark
-nonvisual checks `not-applicable` when appropriate. Preserve historical reports and append
+Any real human approval must be independently controlled and bound to the reviewed revision;
+that is an external/deferred enforcement responsibility, not a new capability here.
+Optional library reports default visual applicability to `unknown` and owner approval to
+`pending`. Callers can explicitly select visual review or justify `not-applicable`; a
+nonempty rationale is descriptive data, not authorization. Native producer formats remain project-specific. Preserve historical reports and append
 new observations; missing access is not a pass or proof of a product defect.
 
 Cancellation, stale observations, and unknown session state belong to the task/session

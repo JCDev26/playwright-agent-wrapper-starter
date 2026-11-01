@@ -189,3 +189,5 @@ See [run evidence v1](docs/run-evidence-v1.md) and the small, dependency-free ad
 `src/reporting/`. Native terminal APIs remain unchanged. The envelope adds tested revision,
 environment, time, named checks, and separate visual/owner states; it is not an evidence
 service or authenticated approval mechanism. Keep the project bounded and independently usable.
+
+These reporting adapters are optional library utilities. Existing CLI/CI output keeps its native format; adapter tests do not establish a universally wired reporting or human-approval system.

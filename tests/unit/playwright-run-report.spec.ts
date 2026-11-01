@@ -17,3 +17,13 @@ test("untrustworthy execution is inconclusive, not proof of failed tests", () =>
   expect(toRunReport(result, context).technical).toBe("inconclusive");
   expect(toRunReport(result, context).ownerApproval).toBe("pending");
 });
+
+test("the caller can justify nonvisual scope without changing native judgment or approval", () => {
+  const result = createFailedResult({ target, artifacts, command: "test", exitCode: 1 });
+  expect(toRunReport(result, context).visual).toBe("unknown");
+  const report = toRunReport(result, context, { applicability: "not-applicable", rationale: "This invocation runs API-only fixtures with no rendered output." });
+  expect(report.visual).toBe("not-applicable");
+  expect(report.technical).toBe("failed");
+  expect(report.ownerApproval).toBe("pending");
+  expect(report.native).toEqual(result);
+});
