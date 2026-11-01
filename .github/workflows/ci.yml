@@ -2,8 +2,15 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feat/agent-quality-ci-*']
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   verify:
@@ -11,6 +18,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version-file: ".nvmrc"
@@ -18,3 +27,12 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+
+      - name: Retain current validation evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-${{ github.sha }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn

@@ -64,7 +64,7 @@ CLI syntax errors (unknown flags or missing arguments) are outside the wrapper-r
 
 ## Quick Start
 
-**Node.js:** `>=18` (see `.nvmrc` / `package.json` `engines`)
+**Node.js:** `>=22.12.0` (see `.nvmrc` / `package.json` `engines`)
 
 ```bash
 npm ci
@@ -181,3 +181,11 @@ docs/            # contracts and design notes
 Browser-driving agents, MCP, orchestration loops, test generation/self-healing, dashboards, enterprise approval systems, and distributed execution infrastructure.
 
 V1 stops at the bounded wrapper and its hardened contracts. Review points are guidance, not mandatory human approval gates.
+
+
+## Portable current-run observations
+
+See [run evidence v1](docs/run-evidence-v1.md) and the small, dependency-free adapters in
+`src/reporting/`. Native terminal APIs remain unchanged. The envelope adds tested revision,
+environment, time, named checks, and separate visual/owner states; it is not an evidence
+service or authenticated approval mechanism. Keep the project bounded and independently usable.

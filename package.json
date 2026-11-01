@@ -4,7 +4,7 @@
   "private": true,
   "description": "Bounded, reviewable Playwright Test wrapper for external AI-assisted or automated QA callers.",
   "engines": {
-    "node": ">=18"
+    "node": ">=22.12.0"
   },
   "scripts": {
     "test": "playwright test",
