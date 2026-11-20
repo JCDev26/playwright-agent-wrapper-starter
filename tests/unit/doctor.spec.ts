@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { runDoctor } from "../../scripts/doctor.cjs";
 import { runPlaywrightTarget } from "../../src/playwright-wrapper/execution/runPlaywrightTarget";
 import { wrapperFixture } from "../support/wrapperFixture";
-const testProfile = require("../../scripts/test-profile.cjs") as (args: string[]) => "unit" | "smoke";
+const testProfile = require("../../scripts/test-profile.cjs") as (args: string[]) => string;
 
 function fixture(root: string) {
   fs.mkdirSync(root, { recursive: true });
@@ -105,9 +105,12 @@ test("doctor exception is an honest preflight error", () => {
 test("unit selection stays browser-free with ordinary runner flags", () => {
   expect(testProfile(["--project=unit", "--grep", "doctor", "--workers=1"])).toBe("unit");
   expect(testProfile(["--project", "unit", "--reporter=line"])).toBe("unit");
+  expect(testProfile(["--project=mobile-ios"])).toBe("mobile-ios");
+  expect(testProfile(["--project", "mobile-ios", "mobile-android"])).toBe("all-browsers");
+  expect(testProfile(["--project=mobile-*"])).toBe("all-browsers");
   expect(testProfile([])).toBe("smoke");
   expect(testProfile(["--project=unit", "--project=smoke"])).toBe("smoke");
-  expect(testProfile(["--project=u*"])).toBe("smoke");
+  expect(testProfile(["--project=u*"])).toBe("unit");
 });
 
 test("dependency-free wrapper bootstrap has clean stdout when setup is blocked", ({}, info) => {

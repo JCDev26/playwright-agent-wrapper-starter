@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Review task board</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { max-width: 40rem; margin: 2rem auto; padding: 0 1rem; font: 1.125rem/1.5 system-ui; color: #182b45; background: #f5f7fb; }
+    main { padding: clamp(1rem, 5vw, 2.5rem); background: white; border-radius: 1rem; }
+    h1 { margin-top: 0; } form { display: grid; gap: .5rem; }
+    button, input { min-width: 0; font: inherit; padding: .55rem; }
+    button { background: #204bb5; color: white; border: 0; border-radius: .3rem; }
+    ul { padding: 0; list-style: none; } li label { display: flex; align-items: center; gap: .5rem; min-height: 44px; overflow-wrap: anywhere; }
+    [role=alert] { color: #a02121; } [role=alert]:empty { margin: 0; }
+  </style>
+</head>
+<body><main>
+  <h1>Review task board</h1>
+  <form novalidate>
+    <label for="task">Task</label>
+    <input id="task" maxlength="100" autocomplete="off">
+    <button disabled>Add task</button>
+  </form>
+  <p role="alert"></p>
+  <ul aria-label="Tasks"></ul>
+  <p role="status">Loading tasks…</p>
+</main>
+<script>
+  const form = document.querySelector('form');
+  const input = document.querySelector('#task');
+  const add = form.querySelector('button');
+  const list = document.querySelector('ul');
+  const message = document.querySelector('[role=alert]');
+  const status = document.querySelector('[role=status]');
+  let tasks = [];
+
+  async function api(path, method = 'GET', data) {
+    const response = await fetch(path, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('The task board could not save or load tasks.');
+    return response.json();
+  }
+  function updateCount() {
+    const open = tasks.filter(task => !task.completed).length;
+    status.textContent = open + (open === 1 ? ' open task' : ' open tasks');
+  }
+  function append(task) {
+    const item = document.createElement('li');
+    const label = document.createElement('label');
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = task.completed;
+    box.addEventListener('change', async () => {
+      box.disabled = true;
+      try {
+        const saved = await api('/api/tasks/' + task.id, 'PATCH', { completed: box.checked });
+        task.completed = saved.completed;
+        updateCount();
+        message.textContent = '';
+      } catch (error) {
+        box.checked = task.completed;
+        message.textContent = error.message;
+      } finally { box.disabled = false; }
+    });
+    label.append(box, document.createTextNode(task.title));
+    item.append(label);
+    list.append(item);
+  }
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    if (add.disabled) return;
+    if (!input.value.trim()) {
+      message.textContent = 'Enter a task before adding it.';
+      return;
+    }
+    add.disabled = true;
+    performance.mark('task-submit');
+    try {
+      const task = await api('/api/tasks', 'POST', { title: input.value });
+      tasks.push(task);
+      append(task);
+      updateCount();
+      performance.measure('task-submit-to-dom', 'task-submit');
+      message.textContent = '';
+      input.value = '';
+    } catch (error) { message.textContent = error.message; }
+    finally { add.disabled = false; }
+  });
+  api('/api/tasks').then(items => {
+    tasks = items;
+    tasks.forEach(append);
+    updateCount();
+    add.disabled = false;
+  }).catch(error => { message.textContent = error.message; });
+</script></body></html>

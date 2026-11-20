@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main, 'feat/agent-quality-ci-*']
+    branches: [main]
   pull_request:
 
 concurrency:
@@ -25,10 +25,12 @@ jobs:
           node-version-file: ".nvmrc"
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
       - run: npm run doctor
       - run: npm run typecheck
-      - run: npm test
+      - run: npm run test:ci
+      - name: Record isolated browser timings
+        run: node scripts/wrapper.cjs --project performance --workers 1
 
       - name: Retain current validation evidence
         if: ${{ !cancelled() }}

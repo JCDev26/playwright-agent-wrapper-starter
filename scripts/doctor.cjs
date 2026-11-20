@@ -18,7 +18,7 @@ function runDoctor({ cwd = process.cwd(), profile = 'smoke', headed = false } = 
     limits: 'Local prerequisite observations only. No tests or app/config validation performed; no network, install, repair, or approval. Readiness can change after this check.' });
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
   if (!check('profile', 'configuration', `Selected ${profile} prerequisites.`, () => {
-    assert(profile === 'unit' || profile === 'smoke', 'Unknown profile: use unit or smoke.');
+    assert(['unit', 'smoke', 'mobile-android', 'mobile-ios', 'performance', 'all-browsers'].includes(profile), 'Unknown prerequisite profile.');
   })) return finish();
   if (!check('node', 'environment', `Node ${deps.nodeVersion ?? process.versions.node}.`, () => {
     const [major, minor] = (deps.nodeVersion ?? process.versions.node).split('.').map(Number);
@@ -62,29 +62,33 @@ function runDoctor({ cwd = process.cwd(), profile = 'smoke', headed = false } = 
     checks.push({ name: 'chromium-launch', category: 'capability', status: 'not-checked', detail: 'Unit profile does not require or certify a browser.' });
     return finish();
   }
-  check('chromium-launch', 'capability', `Installed Chromium launched and closed (${headed ? 'headed' : 'headless'}).`, () => {
-    // No app URLs or external services. A bounded child catches missing binaries and OS launch errors.
-    const script = `const { chromium } = require(${JSON.stringify(path.join(cwd, 'node_modules', 'playwright'))});
-      (async () => {
-        let browser; try { browser = await chromium.launch({ headless: ${!headed}, timeout: 10000 }); }
-        finally { if (browser) await browser.close(); }
-      })().catch(error => { const missing = /Executable doesn't exist/.test(error.message);
-        console.log(JSON.stringify({kind:missing ? 'dependency' : 'environment',
-          detail:missing ? 'Compatible Chromium is missing. Install with: npx playwright install chromium' : error.message})); process.exitCode = 2; });`;
-    const result = (deps.spawnSync ?? spawnSync)(process.execPath, ['-e', script], {
-      cwd, shell: false, windowsHide: true, encoding: 'utf8', timeout: 15000, maxBuffer: 64 * 1024,
-      env: process.env,
+  const engines = profile === 'all-browsers' ? ['chromium', 'webkit']
+    : [profile === 'mobile-ios' ? 'webkit' : 'chromium'];
+  for (const engine of engines) {
+    check(`${engine}-launch`, 'capability', `Installed ${engine} launched and closed (${headed ? 'headed' : 'headless'}).`, () => {
+      // No app URLs or external services. A bounded child catches missing binaries and OS launch errors.
+      const script = `const { ${engine}: browserType } = require(${JSON.stringify(path.join(cwd, 'node_modules', 'playwright'))});
+        (async () => {
+          let browser; try { browser = await browserType.launch({ headless: ${!headed}, timeout: 10000 }); }
+          finally { if (browser) await browser.close(); }
+        })().catch(error => { const missing = /Executable doesn't exist/.test(error.message);
+          console.log(JSON.stringify({kind:missing ? 'dependency' : 'environment',
+            detail:missing ? 'Compatible ${engine} is missing. Install with: npx playwright install ${engine}' : error.message})); process.exitCode = 2; });`;
+      const result = (deps.spawnSync ?? spawnSync)(process.execPath, ['-e', script], {
+        cwd, shell: false, windowsHide: true, encoding: 'utf8', timeout: 15000, maxBuffer: 64 * 1024,
+        env: process.env,
+      });
+      if (result.error || result.status !== 0) {
+        let reason;
+        try { reason = JSON.parse(result.stdout.trim()); } catch { /* preserve uncertainty */ }
+        const category = reason?.kind === 'dependency' ? 'dependency' : 'environment';
+        const message = reason?.detail ?? result.error?.message ?? `${engine} probe did not complete. Check local browser/OS permissions and dependencies.`;
+        const error = new Error(`${category}: ${message}`);
+        error.category = category;
+        throw error;
+      }
     });
-    if (result.error || result.status !== 0) {
-      let reason;
-      try { reason = JSON.parse(result.stdout.trim()); } catch { /* preserve uncertainty */ }
-      const category = reason?.kind === 'dependency' ? 'dependency' : 'environment';
-      const message = reason?.detail ?? result.error?.message ?? 'Chromium probe did not complete. Check local browser/OS permissions and dependencies.';
-      const error = new Error(`${category}: ${message}`);
-      error.category = category;
-      throw error;
-    }
-  });
+  }
   return finish();
 }
 

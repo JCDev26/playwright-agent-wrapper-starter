@@ -15,12 +15,17 @@
     "wrapper:run": "node scripts/wrapper.cjs",
     "typecheck": "tsc --noEmit",
     "doctor": "node scripts/doctor.cjs",
-    "test:integration": "node scripts/test.cjs --project=integration"
+    "test:integration": "node scripts/test.cjs --project=integration",
+    "demo": "tsx examples/task-board/server.ts",
+    "test:mobile": "node scripts/test.cjs --project=mobile-android --project=mobile-ios",
+    "test:performance": "node scripts/test.cjs --project=performance",
+    "test:load": "tsx examples/load/run.ts",
+    "test:ci": "node scripts/test.cjs --project=unit --project=integration --project=smoke --project=mobile-android --project=mobile-ios"
   },
   "devDependencies": {
-    "@playwright/test": "1.59.1",
+    "@playwright/test": "1.65.1",
     "@types/node": "^22.10.1",
-    "tsx": "^4.19.2",
+    "tsx": "4.23.15",
     "typescript": "^5.6.3"
   }
 }

@@ -32,7 +32,7 @@ Doctor makes no network calls, installs no packages or browsers, and performs no
 
 `npm test` covers unit, integration, and smoke tests and requires Chromium. Both it and `npm run test:smoke` gate execution on doctor; `npm run test:integration` also uses the smoke-profile gate. `npm run test:unit` uses the unit profile for browser-free tests with injected pre-flight results where needed. Direct low-level `npx playwright test` bypasses the script gate intentionally. The library wrapper applies the same fail-fast principle after request validation and before target execution. Its blocked result is `execution_error` with `error.code: PREFLIGHT_FAILED`, plus an additive `preflight` report. Distinguish that from an assertion failure or a discovery/configuration error after the pre-flight succeeds.
 
-The dependency-free `scripts/wrapper.cjs` bootstrap runs the unit-profile doctor before loading TSX. A blocked bootstrap produces empty stdout, a JSON health report on stderr, and exit 2, outside the normalized wrapper-result contract. After bootstrap and parsing succeed, valid wrapper requests run the full smoke-profile doctor before target execution. Prefer `node scripts/wrapper.cjs --project smoke` for machine callers.
+The dependency-free `scripts/wrapper.cjs` bootstrap runs the unit-profile doctor before loading TSX. A blocked bootstrap produces empty stdout, a JSON health report on stderr, and exit 2, outside the normalized wrapper-result contract. After bootstrap and parsing succeed, valid wrapper requests run doctor for the selected project before target execution. Prefer `node scripts/wrapper.cjs --project smoke` for machine callers.
 
 ## Read outcomes without overstating them
 
@@ -47,9 +47,9 @@ A setup failure does not prove the product is defective. Conversely, passing doc
 
 ## What the browser demonstration can prove
 
-The smoke test uses a local HTML task board, with no server or external application. It exercises validation, adding a task, and completing it in Chromium, and produces screenshot and trace evidence. This is a small real browser workflow rather than a browser-free assertion sample.
+The smoke test uses an isolated loopback HTTP server and in-memory task API. It checks validation, creation, reopening and persistence after reload in Chromium. The mobile projects share the journey and add a touch and layout check.
 
-A successful, observed run demonstrates the starter's execution/evidence path in that environment; the installed test alone proves no browser validation passed. It does not establish your application's behavior, headed-browser support, cross-browser compatibility, production security, or visual acceptance. The retained Playwright version is exactly 1.59.1; it is not represented as the newest stable version. A clean install must be verified separately from an already-installed local run.
+A successful, observed run demonstrates the starter's execution/evidence path in that environment; the installed test alone proves no browser validation passed. It does not establish your application's behavior, headed-browser support, cross-browser compatibility, production security, or visual acceptance. The manifest and lockfile pin the Playwright version used in CI. A clean install must be verified separately from an already-installed local run.
 
 ## Keep evidence tied to the invocation
 

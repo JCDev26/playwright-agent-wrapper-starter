@@ -165,7 +165,7 @@ export function runPlaywrightTarget(
   let cliScriptPath: string;
 
   try {
-    preflight = (deps.doctor ?? runDoctor)({ profile: "smoke", headed: target.headed });
+    preflight = (deps.doctor ?? runDoctor)({ profile: target.project, headed: target.headed });
     if (preflight.status !== "ready") return finish(createExecutionErrorResult({
       target, command: null, exitCode: null, artifacts: collectArtifacts(), code: "PREFLIGHT_FAILED",
       detail: "Local prerequisites are blocked. No target tests ran. Inspect preflight checks; do not classify this as a product failure.",

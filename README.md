@@ -1,108 +1,59 @@
-# playwright-agent-wrapper-starter
+# Playwright test automation starter
 
-A bounded, reviewable Playwright Test wrapper for human, script, or AI-assisted callers. It accepts a typed request, checks local prerequisites, executes an allowlisted target, and returns normalized JSON with current-run evidence. There is no LLM, prompt loop, or agent runtime inside the wrapper.
+Test a task board on desktop and mobile, measure a real interaction, and give an AI assistant the evidence to explain a failure. The starter uses TypeScript, Playwright Test 1.65.1, and a small HTTP app that runs on your machine.
 
-**Start with the [reference guide](docs/reference-guide.md)** for the separation between contract, execution, observation, reporting, and human review.
+## Run your first test
 
-## Quick start
+Use the Node version in `.nvmrc` or a newer supported Node release.
 
-Use Node.js **>=22.12.0** and the committed lockfile. Playwright is pinned to **1.59.1**; this is the retained locked version, not a claim that it is the newest release.
-
-```bash
+```sh
 npm ci
 npx playwright install chromium
-npm run --silent doctor
-npm run typecheck
-npm test
+npm run test:smoke
+npm run show-report
 ```
 
-Installation commands are explicit user setup steps. Doctor never downloads, installs, or repairs anything. A fresh installation is not established by tests of an existing local setup.
+On a fresh Linux runner, use `npx playwright install --with-deps chromium`. In the HTML report, open **add and complete a review task** and choose its trace. Follow the reopen step from the checkbox action to the PATCH response and the open-task counter. For interactive development, run `npx playwright test --ui --project=smoke`.
 
-The smoke suite launches Chromium against local HTML for a small task board: validation, adding a task, and completing it, with screenshot and trace evidence. It requires no server or external application. Running it successfully demonstrates the wrapper, not validation of your product; the existence of the test is not evidence of a passing browser run.
+## Write your next test
 
-```bash
-npm run test:smoke                      # doctor + browser smoke
-npm run test:unit                       # unit-profile doctor + browser-free unit tests
-npm run test:integration                # smoke-profile doctor + CLI/boundary integration
-npm run --silent doctor -- --profile unit
-```
+Read [the first browser journey](tests/smoke/example.spec.ts) and [its seed](tests/smoke/seed.spec.ts). Add a spec under `tests/smoke/` with the same fixture import. Try adding two tasks, completing one, and checking that the other stays open after a reload. The [fixture](tests/support/board.ts) gives each test its own loopback server and fresh data, including retries. Use `npm run demo` to explore the app manually at `http://127.0.0.1:4173`.
 
-## Local pre-flight doctor
+When adopting this in your codebase, point the fixture at your application and seed independent test data. Playwright's [webServer and baseURL configuration](https://playwright.dev/docs/test-webserver) can start an existing development server for the suite.
 
-`npm run --silent doctor` emits a JSON health report with `ready` or `blocked` status. The default smoke profile checks Node, manifest/lockfile direct development dependencies and installed direct dependencies plus the Playwright runtime, the configuration file's presence, artifact-directory writability, and the actual headless Chromium launch (including its required headless-shell executable). `--profile unit` explicitly skips the browser probe.
-
-Doctor is a dependency-free entrypoint, also runnable as `node scripts/doctor.cjs`. It performs local checks only, creates `artifacts/` if needed, removes its temporary probe, and starts a browser process when needed. It is not a full transitive dependency integrity audit. The browser probe has a 10-second launch timeout and 15-second subprocess limit; timeout does not certify descendant-process cleanup. There is no general wrapper timeout for the target test invocation. It does not execute your Playwright configuration or certify application health, security, or test correctness. A headless launch is not proof that headed execution works.
-
-`npm test` and `npm run test:smoke` are doctor-gated. The library wrapper validates the request first, then runs doctor before target execution. A blocked pre-flight returns `execution_error` with `error.code: PREFLIGHT_FAILED` and an additive `preflight` report. It does not claim that a test ran or failed an assertion. Unit-only readiness is not browser readiness. `npm test` includes unit, integration, and smoke coverage and therefore requires Chromium. `npm run test:integration` uses the smoke-profile gate. Direct low-level `npx playwright test` bypasses the script gate; the wrapper API still gates valid requests. A headed wrapper request uses a headed probe, whose success should not be claimed without observing it.
-
-## Bounded request contract
-
-| Field | Rule |
+| Run | Coverage |
 |---|---|
-| `project` | Allowlisted: `smoke` |
-| `spec` | Optional literal repo-relative `.spec.ts` path under `tests/`; no absolute paths, parent traversal, or NUL |
-| `grep` | Optional Playwright regex string; non-empty, maximum 200 characters, no NUL |
-| `headed` | Optional boolean |
-| `workers` | Optional integer, 1–4 |
+| `npm run test:smoke` | Desktop Chromium. Validation, task completion, reopening and persistence. |
+| `npm test` | Default projects covering the desktop journey, wrapper unit tests and CLI integration. |
+| `npm run test:mobile` | Pixel 10 on Chromium and iPhone 17 on WebKit. Both repeat the desktop journey and exercise a long task name on a touch screen. Install the engines with `npx playwright install chromium webkit`. |
+| `npm run test:performance` | One warm-up and ten measured submissions in Chromium, with the raw durations and median attached to the HTML report. |
+| `npm run test:load` | Starts a private task API and runs k6 at five create/list/delete journeys per second for 15 seconds. Requires the [k6 executable](https://grafana.com/docs/k6/latest/set-up/install-k6/) on PATH. |
 
-The wrapper constructs argv with `shell: false`; callers cannot supply arbitrary command strings. Spec filters are escaped and anchored so regex metacharacters cannot broaden file selection. Missing/nonmatching specs are execution errors. Omitted workers inherit Playwright defaults; the 1–4 limit applies to explicit requests.
+The [Playwright config](playwright.config.ts) uses opt-in projects for mobile and performance. CI explicitly selects the mobile projects and records performance in its own invocation. Try `npx playwright test --project=smoke --shuffle` to check test isolation. Repeat with the printed seed to investigate an order-dependent failure.
 
-This bounds the request surface, **not the authority of test code**. Configuration, tests, dependencies, and reporters must be trusted. It is not a sandbox.
+## Interpret the measurements
 
-## Run the wrapper
+**Mobile** uses emulated device settings. The [touch test](tests/mobile/task-board.spec.ts) checks viewport overflow, checkbox reachability and the resulting counter. Physical devices and native apps need their own coverage.
 
-```bash
-npm run --silent wrapper:run -- --project smoke --spec tests/smoke/example.spec.ts --workers 1
-```
+**Browser performance** measures from the submit handler to the counter's DOM update, including the API round trip. It excludes browser startup and subsequent paint. The [test](tests/performance/task-timing.spec.ts) uses one worker, a warm page and tracing disabled. Establish a baseline on a fixed runner before setting `TASK_MEDIAN_BUDGET_MS` to enforce a positive millisecond budget. The HTML attachment records every sample, the browser version and the environment.
 
-For machine callers, invoke the entrypoint directly:
+**API load** checks successful operations, p95 HTTP latency, error rate and dropped iterations. The [k6 scenario](examples/load/tasks.js) includes example thresholds for this loopback demo. Select rates and budgets from your service objectives when adapting it.
 
-```bash
+## Use the same test with an AI assistant
+
+Start with the [planner, generator and failure-diagnosis exercise](docs/ai-workflow.md). It includes a seed, a human-readable plan and a reproducible product regression. The default suite runs without a model or credentials.
+
+```sh
 node scripts/wrapper.cjs --project smoke --spec tests/smoke/example.spec.ts --workers 1
 ```
 
-The dependency-free `scripts/wrapper.cjs` bootstrap runs the unit-profile doctor before loading TSX. A blocked bootstrap produces empty stdout, a JSON health report on stderr, and exit 2, outside the normalized wrapper-result contract. After bootstrap and parsing succeed, valid wrapper requests run the full smoke-profile doctor before target execution.
+The wrapper accepts a named project and bounded options, probes the required browser, and emits one JSON result on stdout after successful bootstrap and parsing. Playwright diagnostics go to stderr. Use the returned artifact paths to open the HTML, trace and native JSON from that invocation.
 
-For requests reaching the wrapper, stdout contains the normalized JSON result; stderr carries human-readable run output. `--silent` suppresses npm's script banner. CLI parsing errors (unknown flags or missing arguments) are outside the wrapper-result contract: empty stdout, diagnostic stderr, exit 2.
+| Status | Meaning | CLI exit |
+|---|---|---|
+| `passed` | Current-run evidence establishes an accepted Playwright outcome. | 0 |
+| `failed` | Current-run evidence establishes an unexpected test outcome. Both passed and failed judgments carry `ok: true`. | 1 |
+| `validation_error` | Request rejected before execution. | 2 |
+| `execution_error` | No trustworthy completed judgment, including missing prerequisites or no matching tests. | 2 |
 
-### Outcome meanings
-
-- `validation_error`, `ok: false`: the request was rejected before execution.
-- `passed`, `ok: true`: trustworthy current-run Playwright results establish an accepted test outcome.
-- `failed`, `ok: true`: trustworthy current-run results establish unexpected test outcomes.
-- `execution_error`, `ok: false`: no trustworthy completed test judgment, including blocked pre-flight, no tests, all skipped, discovery/configuration errors, abnormal completion, or missing/unusable current-run JSON.
-
-`ok` describes whether a test judgment was obtained, not whether assertions passed. Playwright's expected-failure and retry semantics remain authoritative. Child exit 0/1 alone never establishes passed/failed, and no result certifies broader product correctness.
-
-CLI exit codes are **0** passed, **1** failed tests, **2** validation/execution/parser error. The result's `exitCode` is the observed child code; null means no numeric code was obtained, not necessarily that no process launched.
-
-## Evidence and review
-
-Each wrapper invocation isolates its JSON, HTML, JUnit, trace, and test output beneath `artifacts/wrapper-result-*/`. Use paths returned by that invocation, not an older shared report. Missing ancillary evidence is not a pass and must not replace the primary test judgment. A fresh artifact is attribution to a run, not authentication or approval.
-
-The optional utilities in `src/reporting/` add a portable observation vocabulary while retaining native results. They are not a universally wired CLI/CI reporting service. Technical results, visual review, and owner approval remain separate. An editable approval field cannot authorize a commit, merge, or publication.
-
-## Repository map
-
-```text
-scripts/doctor.cjs             local pre-flight checks
-src/playwright-wrapper/
-  contract/                   request validation + result types
-  execution/                  runner + CLI
-  artifacts/                  current-run artifact collection
-src/reporting/                optional observation adapters
-tests/smoke/                   allowlisted local browser demo
-tests/unit/                    browser-free unit tests
-tests/integration/             CLI and wrapper boundary integration
-docs/                         contracts and design notes
-```
-
-## Further reading
-
-- [Reference and adoption guide](docs/reference-guide.md)
-- [Architecture](docs/architecture.md)
-- [Contracts](docs/contracts.md) and [wrapper contract](docs/wrapper-contract.md)
-- [Result schema](docs/result-schema.md) and [artifact model](docs/artifact-model.md)
-- [Run evidence v1](docs/run-evidence-v1.md) and [human review model](docs/human-review-model.md)
-
-V1 stops at a bounded wrapper. Autonomous browser agents, MCP, orchestration loops, self-healing tests, dashboards, enterprise approval enforcement, and distributed execution remain out of scope.
+See the [request contract](docs/wrapper-contract.md), [result schema](docs/result-schema.md), [artifact model](docs/artifact-model.md) and [adoption guide](docs/reference-guide.md) for integration details. To diagnose setup, run `npm run --silent doctor` or `npm run --silent doctor -- --profile mobile-ios`. Run `npm run typecheck` to check the example app and tests.

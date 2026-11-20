@@ -16,7 +16,7 @@ External human / script / AI caller
 ## Responsibilities
 
 - `scripts/wrapper.cjs`: unit-profile bootstrap before TSX; blocked health goes to stderr outside the normalized result contract.
-- `scripts/doctor.cjs`: local prerequisite probes; valid library requests use the smoke profile before target execution.
+- `scripts/doctor.cjs`: local prerequisite probes; valid library requests probe the selected browser before target execution.
 - `contract/validateInputs.ts`: request types, normalization, fixed input policy.
 - `contract/resultSchema.ts`: result types and constructors.
 - `execution/runPlaywrightTarget.ts`: invocation boundary, process handling, current-run report destination, terminal result.

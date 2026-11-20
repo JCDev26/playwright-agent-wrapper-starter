@@ -1,6 +1,7 @@
 import path from "node:path";
 
-export type PlaywrightProjectName = "smoke";
+const ALLOWED_PROJECTS = ["smoke", "mobile-android", "mobile-ios", "performance"] as const;
+export type PlaywrightProjectName = (typeof ALLOWED_PROJECTS)[number];
 
 export interface PlaywrightTargetRequest {
   /**
@@ -52,7 +53,6 @@ export class InputValidationError extends Error {
   }
 }
 
-const ALLOWED_PROJECTS: readonly PlaywrightProjectName[] = ["smoke"];
 const TESTS_DIR = "tests";
 const MAX_GREP_LENGTH = 200;
 const MIN_WORKERS = 1;

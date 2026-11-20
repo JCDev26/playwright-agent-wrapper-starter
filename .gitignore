@@ -16,7 +16,7 @@ coverage/
 *.tsbuildinfo
 
 # Playwright generated outputs
-artifacts/
+/artifacts/
 playwright-report/
 test-results/
 
