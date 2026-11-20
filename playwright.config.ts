@@ -17,8 +17,10 @@ export default defineConfig({
   },
   outputDir: "artifacts/test-results",
   projects: [
+    { name: "integration", testDir: "./tests/integration", testMatch: /.*\.spec\.ts/ },
     {
       name: "smoke",
+      use: { browserName: "chromium", trace: "on" },
       testDir: "./tests/smoke",
       testMatch: /.*\.spec\.ts/,
     },

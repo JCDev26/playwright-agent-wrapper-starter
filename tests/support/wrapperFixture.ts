@@ -10,9 +10,22 @@ const repo = process.cwd();
 export function wrapperFixture(info: TestInfo) {
   const cwd = info.outputPath("fixture");
   fs.mkdirSync(path.join(cwd, "tests", "smoke"), { recursive: true });
-  fs.mkdirSync(path.join(cwd, "node_modules", "playwright"), { recursive: true });
+  // Test-only package adapters: no symlink privilege or full install per fixture.
+  // Native execution resolves the actual installed packages; reports/config stay isolated.
+  const pkg = JSON.parse(fs.readFileSync(path.join(repo, "package.json"), "utf8"));
+  for (const name of [...Object.keys(pkg.devDependencies), "playwright", "playwright-core"]) {
+    fs.mkdirSync(path.join(cwd, "node_modules", name), { recursive: true });
+    fs.copyFileSync(path.join(repo, "node_modules", name, "package.json"), path.join(cwd, "node_modules", name, "package.json"));
+  }
   fs.writeFileSync(path.join(cwd, "node_modules", "playwright", "cli.js"),
     `require(${JSON.stringify(path.join(repo, "node_modules", "playwright", "cli.js"))});`);
+  fs.writeFileSync(path.join(cwd, "node_modules", "playwright", "index.js"),
+    `module.exports = require(${JSON.stringify(path.join(repo, "node_modules", "playwright"))});`);
+  for (const file of ["tsx/dist/cli.mjs", "typescript/bin/tsc"]) {
+    fs.mkdirSync(path.dirname(path.join(cwd, "node_modules", file)), { recursive: true });
+    fs.copyFileSync(path.join(repo, "node_modules", file), path.join(cwd, "node_modules", file));
+  }
+  for (const file of ["package.json", "package-lock.json"]) fs.copyFileSync(path.join(repo, file), path.join(cwd, file));
   // Use the repository's actual config, resolving only its import from this cwd.
   const config = fs.readFileSync(path.join(repo, "playwright.config.ts"), "utf8")
     .replace('"@playwright/test"', JSON.stringify(require.resolve("@playwright/test")));
@@ -22,12 +35,12 @@ export function wrapperFixture(info: TestInfo) {
       `const { test, expect } = require(${JSON.stringify(require.resolve("@playwright/test"))});\n${body}`);
   }
   spec("example.spec.ts", 'test("passes", () => { expect(1).toBe(1); });');
-  function run(args: string[]) {
+  function run(args: string[], env: NodeJS.ProcessEnv = process.env) {
     return spawnSync(process.execPath, [
       path.join(repo, "node_modules", "tsx", "dist", "cli.mjs"),
       path.join(repo, "src", "playwright-wrapper", "execution", "runPlaywrightTargetCli.ts"),
       ...args,
-    ], { cwd, encoding: "utf8", shell: false, env: process.env });
+    ], { cwd, encoding: "utf8", shell: false, env });
   }
   function request(specPath: string, extra: string[] = []) {
     const child = run(["--project", "smoke", "--spec", specPath, "--workers", "1", ...extra]);

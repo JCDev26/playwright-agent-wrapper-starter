@@ -7,7 +7,7 @@ The wrapper is human-reviewable. It suggests inspection points but never pauses 
 1. Read `status` and `error.code`; `ok` alone is not a test verdict.
 2. Confirm `target` describes the intended request. On validation errors it may contain rejected values.
 3. Inspect the current invocation's `testResultsJson` when available.
-4. Use HTML/JUnit/traces for deeper review after checking they belong to the relevant invocation; those paths are presence-based and shared.
+4. Use HTML/JUnit/traces for deeper review after checking they belong to the relevant invocation; those paths are presence-based within the wrapper invocation directory.
 5. Decide whether to correct the request, investigate execution, or inspect test findings.
 
 ## Interpreting results

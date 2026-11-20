@@ -45,6 +45,7 @@ interface PlaywrightRunResult {
   };
   summary: { message: string; nextReviewPoint: string };
   error?: { code: PlaywrightRunErrorCode; detail: string };
+  preflight?: DoctorResult;
 }
 ```
 
@@ -52,6 +53,6 @@ Only passed/failed have `ok: true`. Both require current-run native evidence of 
 
 `exitCode` is the child code, not the CLI code. Null means no numeric child exit code was obtained; it does not prove that no process launched. `command` is a display string, not a replayable shell interface.
 
-See [result schema](result-schema.md) for exact statuses, error codes and parser exceptions, and [artifact model](artifact-model.md) for current-run versus presence-based references.
+See [result schema](result-schema.md) for exact statuses, error codes and parser exceptions, and [artifact model](artifact-model.md) for invocation-scoped JSON judgment versus ancillary presence-based references.
 
 The contract stays specific to bounded Playwright execution. New Playwright options do not automatically belong in the public request surface.

@@ -1,4 +1,5 @@
 import type { PlaywrightTargetEcho } from "./validateInputs";
+import type { DoctorResult } from "../../../scripts/doctor.cjs";
 
 export interface PlaywrightArtifacts {
   htmlReport: string | null;
@@ -24,6 +25,7 @@ export type PlaywrightRunErrorCode =
   | "INVALID_GREP"
   | "INVALID_HEADED"
   | "INVALID_WORKERS"
+  | "PREFLIGHT_FAILED"
   | "COMMAND_CONSTRUCTION_FAILED"
   | "PROCESS_LAUNCH_FAILED"
   | "PROCESS_COMPLETION_FAILED"
@@ -43,6 +45,7 @@ export interface PlaywrightRunResult {
   artifacts: PlaywrightArtifacts;
   summary: PlaywrightRunSummary;
   error?: PlaywrightRunError;
+  preflight?: DoctorResult;
 }
 
 export function createPassedResult(params: {

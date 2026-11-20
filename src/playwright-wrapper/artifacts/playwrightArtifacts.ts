@@ -2,10 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import type { PlaywrightArtifacts } from "../contract/resultSchema";
 
-const HTML_REPORT_PATH = "artifacts/playwright-report/index.html";
-const TEST_RESULTS_JSON_PATH = "artifacts/test-results.json";
-const TEST_RESULTS_XML_PATH = "artifacts/test-results.xml";
-const TRACE_ROOT = "artifacts/test-results";
 
 function toRepoRelativePath(filePath: string): string {
   return filePath.split(path.sep).join("/");
@@ -40,11 +36,16 @@ function collectTraceFilesFromDir(dirPath: string): string[] {
   return collected.sort();
 }
 
-export function collectPlaywrightArtifacts(): PlaywrightArtifacts {
+export function collectPlaywrightArtifacts(root: string | null): PlaywrightArtifacts {
+  if (!root) return { htmlReport: null, testResultsJson: null, testResultsXml: null, traceFiles: [] };
+  const HTML_REPORT_PATH = path.join(root, "html", "index.html");
+  const TEST_RESULTS_JSON_PATH = path.join(root, "results.json");
+  const TEST_RESULTS_XML_PATH = path.join(root, "junit.xml");
+  const TRACE_ROOT = path.join(root, "test-results");
   return {
-    htmlReport: fileExists(HTML_REPORT_PATH) ? HTML_REPORT_PATH : null,
-    testResultsJson: fileExists(TEST_RESULTS_JSON_PATH) ? TEST_RESULTS_JSON_PATH : null,
-    testResultsXml: fileExists(TEST_RESULTS_XML_PATH) ? TEST_RESULTS_XML_PATH : null,
+    htmlReport: fileExists(HTML_REPORT_PATH) ? toRepoRelativePath(HTML_REPORT_PATH) : null,
+    testResultsJson: fileExists(TEST_RESULTS_JSON_PATH) ? toRepoRelativePath(TEST_RESULTS_JSON_PATH) : null,
+    testResultsXml: fileExists(TEST_RESULTS_XML_PATH) ? toRepoRelativePath(TEST_RESULTS_XML_PATH) : null,
     traceFiles: collectTraceFilesFromDir(TRACE_ROOT),
   };
 }

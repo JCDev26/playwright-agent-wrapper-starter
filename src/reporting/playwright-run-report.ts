@@ -7,8 +7,7 @@ export function toRunReport(result: PlaywrightRunResult, context: RunContext, vi
     name: "playwright",
     status: result.status === "passed" && result.ok ? "passed"
       : result.status === "failed" ? "failed" : "inconclusive",
-    // The wrapper isolates this path for the current invocation. Other optional
-    // report/trace paths can refer to prior runs and are not promoted as fresh evidence.
+    // Promote the native JSON judgment as evidence; all wrapper artifacts are run-scoped.
     evidence: result.artifacts.testResultsJson ? [result.artifacts.testResultsJson] : [],
   }], visual), native: structuredClone(result) };
 }

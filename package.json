@@ -7,16 +7,18 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "test": "playwright test",
-    "test:headed": "playwright test --headed",
-    "test:smoke": "playwright test --project=smoke",
-    "test:unit": "playwright test --project=unit",
+    "test": "node scripts/test.cjs",
+    "test:headed": "node scripts/test.cjs --headed",
+    "test:smoke": "node scripts/test.cjs --project=smoke",
+    "test:unit": "node scripts/test.cjs --project=unit",
     "show-report": "playwright show-report artifacts/playwright-report",
-    "wrapper:run": "tsx src/playwright-wrapper/execution/runPlaywrightTargetCli.ts",
-    "typecheck": "tsc --noEmit"
+    "wrapper:run": "node scripts/wrapper.cjs",
+    "typecheck": "tsc --noEmit",
+    "doctor": "node scripts/doctor.cjs",
+    "test:integration": "node scripts/test.cjs --project=integration"
   },
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
+    "@playwright/test": "1.59.1",
     "@types/node": "^22.10.1",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3"

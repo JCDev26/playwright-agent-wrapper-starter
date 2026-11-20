@@ -98,3 +98,38 @@ for (const args of [[], ["--project"], ["--project", "smoke", "--unknown"]]) {
     expect(child.stderr.trim().length).toBeGreaterThan(0);
   });
 }
+
+test("native HTML, JUnit, trace and screenshot evidence stays isolated across browser runs", ({}, info) => {
+  const fixture = wrapperFixture(info);
+  fixture.spec("browser.spec.ts", `test('browser evidence', async ({ page }, info) => {
+    await page.setContent('<h1>Local evidence fixture</h1>');
+    await expect(page.getByRole('heading')).toHaveText('Local evidence fixture');
+    await info.attach('page', { body: await page.screenshot(), contentType: 'image/png' });
+  });`);
+  const first = fixture.request("tests/smoke/browser.spec.ts").result;
+  expect(first.status).toBe("passed");
+  const old = [first.artifacts.htmlReport!, first.artifacts.testResultsXml!, ...first.artifacts.traceFiles]
+    .map(file => ({ file, bytes: fs.readFileSync(path.join(fixture.cwd, file)) }));
+  const second = fixture.request("tests/smoke/browser.spec.ts").result;
+  expect(second.status).toBe("passed");
+  expect(first.artifacts.htmlReport).not.toBe(second.artifacts.htmlReport);
+  expect(first.artifacts.testResultsXml).not.toBe(second.artifacts.testResultsXml);
+  for (const result of [first, second]) {
+    const root = path.dirname(result.artifacts.testResultsJson!);
+    expect(result.artifacts.traceFiles.length).toBeGreaterThan(0);
+    const files = [result.artifacts.htmlReport!, result.artifacts.testResultsXml!, ...result.artifacts.traceFiles];
+    for (const file of files) {
+      expect(file.startsWith(root + "/")).toBe(true);
+      expect(fs.statSync(path.join(fixture.cwd, file)).isFile()).toBe(true);
+    }
+    const report = fixture.report(result);
+    const attachments: any[] = [];
+    function visit(suite: any) {
+      for (const spec of suite.specs ?? []) for (const test of spec.tests ?? []) for (const attempt of test.results ?? []) attachments.push(...(attempt.attachments ?? []));
+      for (const child of suite.suites ?? []) visit(child);
+    }
+    for (const suite of report.suites) visit(suite);
+    expect(attachments.some(attachment => attachment.contentType === "image/png")).toBe(true);
+  }
+  for (const { file, bytes } of old) expect(fs.readFileSync(path.join(fixture.cwd, file))).toEqual(bytes);
+});

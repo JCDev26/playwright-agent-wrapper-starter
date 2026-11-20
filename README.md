@@ -1,193 +1,108 @@
 # playwright-agent-wrapper-starter
 
-Bounded, reviewable Playwright Test wrapper for external AI-assisted or automated QA callers.
+A bounded, reviewable Playwright Test wrapper for human, script, or AI-assisted callers. It accepts a typed request, checks local prerequisites, executes an allowlisted target, and returns normalized JSON with current-run evidence. There is no LLM, prompt loop, or agent runtime inside the wrapper.
 
-This repository puts a deterministic wrapper between an external caller and raw Playwright execution. The caller may be a human, a script, or an AI system. The wrapper itself contains no LLM, prompt loop, or agent runtime.
+**Start with the [reference guide](docs/reference-guide.md)** for the separation between contract, execution, observation, reporting, and human review.
 
-## Why this exists
+## Quick start
 
-Letting an assistant construct arbitrary `npx playwright ...` commands is a weak operational boundary:
-
-- execution scope is hard to review
-- flags and paths are easy to over-permit
-- outcomes arrive as raw terminal noise
-- reasoning and execution stay tightly coupled
-
-This project demonstrates a narrower pattern: accept a typed request, validate it, run only approved Playwright targets, and return a normalized JSON result with artifact references.
-
-## What is bounded
-
-The public request surface is intentionally small:
-
-| Field | Rule |
-|---|---|
-| `project` | allowlisted (`smoke` in v1) |
-| `spec` | optional literal repo-relative `.spec.ts` path under `tests/`; no absolute paths, parent traversal, or NUL |
-| `grep` | optional Playwright regex string; non-empty, max 200 chars, no NUL |
-| `headed` | optional boolean |
-| `workers` | optional integer, 1–4 |
-
-The wrapper builds argv itself (`shell: false`). Callers do not supply raw command strings.
-
-Spec paths are escaped and anchored before Playwright interprets its file filter. Regex metacharacters cannot broaden a spec selection. Missing/nonmatching specs produce an execution error. Omitted workers inherit Playwright configuration/defaults; 1–4 bounds only explicit requests.
-
-## How a run works
-
-```text
-External caller
-Human / AI / automation
-        |
-        v
-  Bounded request
-        |
-        v
-  Input validation
-        |
-        v
-  Playwright wrapper
-        |
-        v
-  Playwright Test
-        |
-        v
-  Native artifacts
-        |
-        v
-  Normalized JSON result
-```
-
-- **stdout** carries the normalized JSON result for requests reaching the wrapper
-- **stderr** carries Playwright's human-readable run output
-- native HTML/JSON/JUnit reports remain under `artifacts/`
-
-CLI syntax errors (unknown flags or missing arguments) are outside the wrapper-result contract: empty stdout, diagnostic stderr, exit 2.
-
-## Quick Start
-
-**Node.js:** `>=22.12.0` (see `.nvmrc` / `package.json` `engines`)
+Use Node.js **>=22.12.0** and the committed lockfile. Playwright is pinned to **1.59.1**; this is the retained locked version, not a claim that it is the newest release.
 
 ```bash
 npm ci
+npx playwright install chromium
+npm run --silent doctor
 npm run typecheck
 npm test
 ```
 
-This sample suite does not launch browsers, so no `playwright install` step is required for the default tests.
+Installation commands are explicit user setup steps. Doctor never downloads, installs, or repairs anything. A fresh installation is not established by tests of an existing local setup.
 
-### Run the wrapper (developer-friendly)
+The smoke suite launches Chromium against local HTML for a small task board: validation, adding a task, and completing it, with screenshot and trace evidence. It requires no server or external application. Running it successfully demonstrates the wrapper, not validation of your product; the existence of the test is not evidence of a passing browser run.
+
+```bash
+npm run test:smoke                      # doctor + browser smoke
+npm run test:unit                       # unit-profile doctor + browser-free unit tests
+npm run test:integration                # smoke-profile doctor + CLI/boundary integration
+npm run --silent doctor -- --profile unit
+```
+
+## Local pre-flight doctor
+
+`npm run --silent doctor` emits a JSON health report with `ready` or `blocked` status. The default smoke profile checks Node, manifest/lockfile direct development dependencies and installed direct dependencies plus the Playwright runtime, the configuration file's presence, artifact-directory writability, and the actual headless Chromium launch (including its required headless-shell executable). `--profile unit` explicitly skips the browser probe.
+
+Doctor is a dependency-free entrypoint, also runnable as `node scripts/doctor.cjs`. It performs local checks only, creates `artifacts/` if needed, removes its temporary probe, and starts a browser process when needed. It is not a full transitive dependency integrity audit. The browser probe has a 10-second launch timeout and 15-second subprocess limit; timeout does not certify descendant-process cleanup. There is no general wrapper timeout for the target test invocation. It does not execute your Playwright configuration or certify application health, security, or test correctness. A headless launch is not proof that headed execution works.
+
+`npm test` and `npm run test:smoke` are doctor-gated. The library wrapper validates the request first, then runs doctor before target execution. A blocked pre-flight returns `execution_error` with `error.code: PREFLIGHT_FAILED` and an additive `preflight` report. It does not claim that a test ran or failed an assertion. Unit-only readiness is not browser readiness. `npm test` includes unit, integration, and smoke coverage and therefore requires Chromium. `npm run test:integration` uses the smoke-profile gate. Direct low-level `npx playwright test` bypasses the script gate; the wrapper API still gates valid requests. A headed wrapper request uses a headed probe, whose success should not be claimed without observing it.
+
+## Bounded request contract
+
+| Field | Rule |
+|---|---|
+| `project` | Allowlisted: `smoke` |
+| `spec` | Optional literal repo-relative `.spec.ts` path under `tests/`; no absolute paths, parent traversal, or NUL |
+| `grep` | Optional Playwright regex string; non-empty, maximum 200 characters, no NUL |
+| `headed` | Optional boolean |
+| `workers` | Optional integer, 1–4 |
+
+The wrapper constructs argv with `shell: false`; callers cannot supply arbitrary command strings. Spec filters are escaped and anchored so regex metacharacters cannot broaden file selection. Missing/nonmatching specs are execution errors. Omitted workers inherit Playwright defaults; the 1–4 limit applies to explicit requests.
+
+This bounds the request surface, **not the authority of test code**. Configuration, tests, dependencies, and reporters must be trusted. It is not a sandbox.
+
+## Run the wrapper
 
 ```bash
 npm run --silent wrapper:run -- --project smoke --spec tests/smoke/example.spec.ts --workers 1
 ```
 
-`--silent` avoids npm's script banner so stdout stays pure JSON.
-
-### Run the wrapper (machine-friendly)
-
-Prefer invoking the CLI entrypoint directly when another system will parse stdout:
+For machine callers, invoke the entrypoint directly:
 
 ```bash
-node node_modules/tsx/dist/cli.mjs src/playwright-wrapper/execution/runPlaywrightTargetCli.ts --project smoke --spec tests/smoke/example.spec.ts --workers 1
+node scripts/wrapper.cjs --project smoke --spec tests/smoke/example.spec.ts --workers 1
 ```
 
-### Example success shape (project-only request)
+The dependency-free `scripts/wrapper.cjs` bootstrap runs the unit-profile doctor before loading TSX. A blocked bootstrap produces empty stdout, a JSON health report on stderr, and exit 2, outside the normalized wrapper-result contract. After bootstrap and parsing succeed, valid wrapper requests run the full smoke-profile doctor before target execution.
 
-```json
-{
-  "ok": true,
-  "status": "passed",
-  "target": {
-    "project": "smoke",
-    "spec": null,
-    "grep": null,
-    "headed": false,
-    "workers": 1
-  },
-  "command": "npx playwright test --project=smoke --workers=1",
-  "exitCode": 0,
-  "artifacts": {
-    "htmlReport": "artifacts/playwright-report/index.html",
-    "testResultsJson": "artifacts/wrapper-result-<suffix>/results.json",
-    "testResultsXml": "artifacts/test-results.xml",
-    "traceFiles": []
-  },
-  "summary": {
-    "message": "Playwright run completed successfully.",
-    "nextReviewPoint": "Open the HTML report if deeper inspection is needed."
-  }
-}
-```
-
-The generated `<suffix>` isolates this invocation's native JSON result. `command` is a display string; the actual child is Node plus the local Playwright CLI. With a spec, the display contains an escaped absolute-file filter.
+For requests reaching the wrapper, stdout contains the normalized JSON result; stderr carries human-readable run output. `--silent` suppresses npm's script banner. CLI parsing errors (unknown flags or missing arguments) are outside the wrapper-result contract: empty stdout, diagnostic stderr, exit 2.
 
 ### Outcome meanings
 
-- `validation_error` / `ok: false`: rejected before Playwright execution.
-- `passed` / `ok: true`: current-run results establish completed test attempts and an accepted Playwright outcome.
-- `failed` / `ok: true`: current-run results establish completed test attempts and unexpected Playwright test outcomes.
-- `execution_error` / `ok: false`: no trustworthy completed test judgment, including no tests, all skipped, discovery/configuration errors, abnormal completion, or missing/unusable current-run JSON.
+- `validation_error`, `ok: false`: the request was rejected before execution.
+- `passed`, `ok: true`: trustworthy current-run Playwright results establish an accepted test outcome.
+- `failed`, `ok: true`: trustworthy current-run results establish unexpected test outcomes.
+- `execution_error`, `ok: false`: no trustworthy completed test judgment, including blocked pre-flight, no tests, all skipped, discovery/configuration errors, abnormal completion, or missing/unusable current-run JSON.
 
-Playwright's expected-failure and retry rules apply. These outcomes do not certify broader product correctness. Child exit 0/1 alone never establishes passed/failed.
+`ok` describes whether a test judgment was obtained, not whether assertions passed. Playwright's expected-failure and retry semantics remain authoritative. Child exit 0/1 alone never establishes passed/failed, and no result certifies broader product correctness.
 
-CLI exit codes: `0` passed, `1` failed, `2` validation/execution/parser error. The result's `exitCode` is the observed child code; null means no numeric code was obtained, not necessarily that no process launched.
+CLI exit codes are **0** passed, **1** failed tests, **2** validation/execution/parser error. The result's `exitCode` is the observed child code; null means no numeric code was obtained, not necessarily that no process launched.
 
-Only the fresh `testResultsJson` has current-invocation attribution. HTML/JUnit/trace paths merely indicate filesystem presence and may be older or overwritten. Ancillary scanning failures degrade those references without replacing the primary result. See [artifact semantics](docs/artifact-model.md).
+## Evidence and review
 
-### Useful checks
+Each wrapper invocation isolates its JSON, HTML, JUnit, trace, and test output beneath `artifacts/wrapper-result-*/`. Use paths returned by that invocation, not an older shared report. Missing ancillary evidence is not a pass and must not replace the primary test judgment. A fresh artifact is attribution to a run, not authentication or approval.
 
-```bash
-# smoke target only (what the wrapper allowlists)
-npm run test:smoke
+The optional utilities in `src/reporting/` add a portable observation vocabulary while retaining native results. They are not a universally wired CLI/CI reporting service. Technical results, visual review, and owner approval remain separate. An editable approval field cannot authorize a commit, merge, or publication.
 
-# wrapper unit/boundary tests only
-npm run test:unit
-
-# rejected request stays honest and does not spawn Playwright
-npm run --silent wrapper:run -- --project ui
-```
-
-## What this is / is not
-
-**Is:** a concrete Playwright execution-boundary demo — validation, safe argv construction, normalized results, artifact references.
-
-**Is not:** an LLM client, MCP server, autonomous QA agent, multi-agent system, prompt library, or generic command runner.
-
-AI assistance is external. Separating intent from execution is the point.
-
-## Repository structure
+## Repository map
 
 ```text
+scripts/doctor.cjs             local pre-flight checks
 src/playwright-wrapper/
-  contract/      # request validation + result types
-  execution/     # runner + CLI
-  artifacts/     # Playwright artifact path collection
-tests/
-  smoke/         # allowlisted demo target for the wrapper
-  unit/          # wrapper boundary/unit tests
-docs/            # contracts and design notes
+  contract/                   request validation + result types
+  execution/                  runner + CLI
+  artifacts/                  current-run artifact collection
+src/reporting/                optional observation adapters
+tests/smoke/                   allowlisted local browser demo
+tests/unit/                    browser-free unit tests
+tests/integration/             CLI and wrapper boundary integration
+docs/                         contracts and design notes
 ```
 
-## Deeper docs
+## Further reading
 
+- [Reference and adoption guide](docs/reference-guide.md)
 - [Architecture](docs/architecture.md)
-- [Contracts](docs/contracts.md)
-- [Wrapper contract](docs/wrapper-contract.md)
-- [Result schema](docs/result-schema.md)
-- [Artifact model](docs/artifact-model.md)
-- [Human review model](docs/human-review-model.md)
+- [Contracts](docs/contracts.md) and [wrapper contract](docs/wrapper-contract.md)
+- [Result schema](docs/result-schema.md) and [artifact model](docs/artifact-model.md)
+- [Run evidence v1](docs/run-evidence-v1.md) and [human review model](docs/human-review-model.md)
 
-## Out of scope for v1
-
-Browser-driving agents, MCP, orchestration loops, test generation/self-healing, dashboards, enterprise approval systems, and distributed execution infrastructure.
-
-V1 stops at the bounded wrapper and its hardened contracts. Review points are guidance, not mandatory human approval gates.
-
-
-## Portable current-run observations
-
-See [run evidence v1](docs/run-evidence-v1.md) and the small, dependency-free adapters in
-`src/reporting/`. Native terminal APIs remain unchanged. The envelope adds tested revision,
-environment, time, named checks, and separate visual/owner states; it is not an evidence
-service or authenticated approval mechanism. Keep the project bounded and independently usable.
-
-These reporting adapters are optional library utilities. Existing CLI/CI output keeps its native format; adapter tests do not establish a universally wired reporting or human-approval system.
+V1 stops at a bounded wrapper. Autonomous browser agents, MCP, orchestration loops, self-healing tests, dashboards, enterprise approval enforcement, and distributed execution remain out of scope.

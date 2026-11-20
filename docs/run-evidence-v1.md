@@ -65,7 +65,6 @@ complete native wrapper result and maps passed/failed versus unavailable judgmen
 remains authoritative and unchanged. Callers supply the actual tested revision/environment.
 
 Only the invocation-scoped JSON path is promoted into checks.evidence. Native HTML/JUnit
-and trace references remain presence-only and may be stale; inspect their provenance before
-review. A fresh JSON path is attribution, not authentication or proof of a passed test.
+and trace references remain presence-only but are now isolated within the same wrapper invocation directory; their contents are not authenticated. A fresh JSON path is attribution, not authentication or proof of a passed test.
 The wrapper's current-run judgment has already validated native JSON contents before the
 adapter observes its status. This adapter adds no history store or concurrency service.

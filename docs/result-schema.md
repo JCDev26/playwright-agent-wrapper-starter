@@ -9,7 +9,7 @@ The wrapper returns `PlaywrightRunResult`. It reports request validity and a Pla
 | `validation_error` | false | Request rejected before Playwright execution. | 2 |
 | `passed` | true | Current-run native results establish completed test attempts and an accepted Playwright outcome, consistent with child exit 0. | 0 |
 | `failed` | true | Current-run native results establish completed test attempts and unexpected test outcomes, consistent with child exit 1. | 1 |
-| `execution_error` | false | No trustworthy completed test judgment: preparation/launch failure, abnormal completion, runner/discovery errors, no tests, all skipped, or missing/unusable/contradictory result evidence. | 2 |
+| `execution_error` | false | No trustworthy completed test judgment: blocked pre-flight, preparation/launch failure, abnormal completion, runner/discovery errors, no tests, all skipped, or missing/unusable/contradictory result evidence. | 2 |
 
 Playwright's expected-failure and retry semantics remain authoritative. An expected failure or a successful retry can contribute to `passed`; an unexpected pass of a test marked to fail can contribute to `failed`. Test-associated assertion, fixture, hook, or timeout failures remain Playwright test outcomes. Runner-level errors take precedence over test outcomes. Neither status diagnoses whether a defect belongs to the product, test, or environment.
 
@@ -24,17 +24,19 @@ Exit code alone never establishes `passed` or `failed`. A no-tests child exit of
 - `exitCode`: observed Playwright child exit code. Null means no exit code was obtained: execution may never have started, or a launched process may have terminated without a numeric exit status. This is distinct from the wrapper CLI exit.
 - `artifacts`: always present; see [artifact semantics](artifact-model.md).
 - `summary.message` and `summary.nextReviewPoint`: human review guidance, not approval gates.
+- `preflight`: optional local doctor report, with `ready` or `blocked` status, when obtained after request validation. Absent on validation rejection or if doctor throws before returning a report.
 - `error`: structured code and explanatory detail for validation/execution errors; absent for passed/failed. Consumers should branch on status/code, not parse detail text.
 
 ## Current-run judgment
 
-Each invocation prepares a fresh `artifacts/wrapper-result-<suffix>/results.json` location and passes it to the native JSON reporter through the child environment. Only that file can classify the invocation.
+After validation and pre-flight succeed, each invocation prepares a fresh `artifacts/wrapper-result-<suffix>/results.json` location and passes it to the native JSON reporter through the child environment. Only that file can classify the invocation.
 
 The wrapper checks native runner errors, nested test outcomes and completed attempts, outcome totals, and consistency with the child exit. Empty/all-skipped, interrupted, malformed, inconsistent, or absent results cannot establish a judgment. It does not parse console output or duplicate assertion evaluation.
 
 ## Error codes
 
 - `INVALID_PROJECT`, `INVALID_SPEC`, `INVALID_GREP`, `INVALID_HEADED`, `INVALID_WORKERS`: request rejection.
+- `PREFLIGHT_FAILED`: local prerequisites were blocked or doctor could not complete; no target tests ran.
 - `COMMAND_CONSTRUCTION_FAILED`: invocation or result-location preparation failed, including local CLI resolution.
 - `PROCESS_LAUNCH_FAILED`: synchronous launch exception or returned spawn error.
 - `PROCESS_COMPLETION_FAILED`: missing exit status or a child code other than 0/1.
@@ -70,4 +72,4 @@ These are field excerpts; the actual result also includes target, command, artif
 
 For requests reaching the wrapper, stdout contains one JSON result and Playwright human output goes to stderr. CLI syntax errors (unknown flags, missing flag values, missing required project) are intentionally outside this result contract: empty stdout, diagnostic stderr, exit 2. Runtime failures before the entrypoint can execute are also outside the contract.
 
-Use direct CLI invocation or `npm run --silent wrapper:run` to avoid npm's banner on stdout.
+The dependency-free `scripts/wrapper.cjs` bootstrap runs the unit-profile doctor before loading TSX. A blocked bootstrap produces empty stdout, a JSON health report on stderr, and exit 2, outside the normalized wrapper-result contract. After bootstrap and parsing succeed, valid wrapper requests run the full smoke-profile doctor before target execution. Use `node scripts/wrapper.cjs` or `npm run --silent wrapper:run` to avoid npm's banner on stdout.

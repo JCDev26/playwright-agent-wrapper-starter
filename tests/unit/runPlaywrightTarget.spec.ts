@@ -1,11 +1,15 @@
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
+import path from "node:path";
 import { playwrightReport } from "../support/playwrightReport";
 import {
-  runPlaywrightTarget,
+  runPlaywrightTarget as runNativeTarget,
   type PlaywrightSpawnSync,
 } from "../../src/playwright-wrapper/execution/runPlaywrightTarget";
 import type { PlaywrightArtifacts } from "../../src/playwright-wrapper/contract/resultSchema";
+
+const ready = () => ({ schemaVersion: 1 as const, status: "ready" as const, profile: "smoke", checkedAt: new Date().toISOString(), checks: [], limits: "Test double" });
+const runPlaywrightTarget: typeof runNativeTarget = (input, deps = {}) => runNativeTarget(input, { doctor: ready, ...deps });
 
 const emptyArtifacts: PlaywrightArtifacts = {
   htmlReport: null,
@@ -95,7 +99,7 @@ test.describe("runPlaywrightTarget boundary", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0]?.stdio).toEqual(["ignore", 2, 2]);
     expect(calls[0]?.shell).toBe(false);
-    expect(calls[0]?.args).toEqual([
+    expect(calls[0]?.args.slice(0, -1)).toEqual([
       "/fake/playwright/cli.js",
       "test",
       "--project=smoke",
@@ -270,7 +274,7 @@ test("grep remains a single argument and never becomes shell text", () => {
     spawnSync, resolveCliScriptPath: () => "/fake/cli.js",
   });
   expect(calls[0]?.shell).toBe(false);
-  expect(calls[0]?.args.slice(-2)).toEqual(["--grep", grep]);
+  expect(calls[0]?.args.slice(-3, -1)).toEqual(["--grep", grep]);
 });
 
 for (const mode of ["malformed", "shape", "totals", "interrupted", "no-attempt", "contradictory", "runner-error"]) {
@@ -292,3 +296,34 @@ for (const mode of ["malformed", "shape", "totals", "interrupted", "no-attempt",
       error: { code: "TEST_JUDGMENT_UNAVAILABLE" } });
   });
 }
+
+test("every wrapper artifact belongs to its own invocation and earlier bytes remain intact", () => {
+  const roots: string[] = [];
+  const spawnSync: PlaywrightSpawnSync = (_command, args, options) => {
+    const root = path.dirname(options.env.PLAYWRIGHT_JSON_OUTPUT_FILE!);
+    roots.push(root);
+    expect(options.env.PLAYWRIGHT_JUNIT_OUTPUT_FILE).toBe(path.join(root, "junit.xml"));
+    expect(options.env.PLAYWRIGHT_HTML_OUTPUT_DIR).toBe(path.join(root, "html"));
+    expect(args.at(-1)).toBe("--output=" + path.join(root, "test-results"));
+    fs.mkdirSync(path.join(root, "html"), { recursive: true });
+    fs.mkdirSync(path.join(root, "test-results", "example"), { recursive: true });
+    fs.writeFileSync(path.join(root, "results.json"), JSON.stringify(playwrightReport()));
+    fs.writeFileSync(path.join(root, "junit.xml"), "<testsuites/>");
+    fs.writeFileSync(path.join(root, "html", "index.html"), `run ${roots.length}`);
+    fs.writeFileSync(path.join(root, "test-results", "example", "trace.zip"), "fixture, not a real trace");
+    return { status: 0 };
+  };
+  const first = runPlaywrightTarget({ project: "smoke" }, { spawnSync });
+  const second = runPlaywrightTarget({ project: "smoke" }, { spawnSync });
+  expect(roots[0]).not.toBe(roots[1]);
+  expect(first.status).toBe("passed");
+  expect(second.status).toBe("passed");
+  for (const [index, result] of [first, second].entries()) {
+    const files = [result.artifacts.htmlReport!, result.artifacts.testResultsJson!, result.artifacts.testResultsXml!, ...result.artifacts.traceFiles];
+    expect(files).toHaveLength(4);
+    expect(files.every(file => path.resolve(file).startsWith(roots[index] + path.sep))).toBe(true);
+    expect(fs.readFileSync(result.artifacts.htmlReport!, "utf8")).toBe(`run ${index + 1}`);
+  }
+  const rejected = runPlaywrightTarget({ project: "ui" });
+  expect(rejected.artifacts).toEqual(emptyArtifacts);
+});

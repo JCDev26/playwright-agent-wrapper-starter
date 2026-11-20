@@ -1,6 +1,6 @@
 # Wrapper contract
 
-An external human, script, or AI system provides a request. The wrapper validates it, constructs approved argv, launches the local Playwright installation, and returns a result with artifact references.
+An external human, script, or AI system provides a request. The wrapper validates it, checks local prerequisites, constructs approved argv, launches the local Playwright installation, and returns a result with artifact references.
 
 ## Request and execution policy
 
@@ -31,8 +31,9 @@ Run from the repository root. Configuration, test code, dependencies, and inheri
 The wrapper owns:
 
 - input validation and literal target translation;
+- local pre-flight checks, with `PREFLIGHT_FAILED` when blocked or unavailable;
 - local child-process launch and structured launch/completion errors;
-- a fresh native JSON report destination for the invocation;
+- fresh native JSON/HTML/JUnit report and test-output destinations for the invocation;
 - a small projection of native results sufficient to classify completed test judgments;
 - best-effort discovery of ancillary report/trace paths.
 
@@ -44,6 +45,6 @@ A completed test judgment yields `passed` or `failed`, both with `ok: true`. Rej
 
 CLI exits are 0 for passed, 1 for failed, and 2 for validation/execution errors.
 
-For parsed requests reaching the wrapper, stdout contains one JSON result; Playwright human output goes to stderr. CLI syntax failures are intentionally separate: empty stdout, diagnostic stderr, exit 2. Use direct invocation or `npm run --silent wrapper:run` to avoid npm banners.
+For parsed requests reaching the wrapper, stdout contains one JSON result; Playwright human output goes to stderr. CLI syntax failures are intentionally separate: empty stdout, diagnostic stderr, exit 2. The dependency-free `scripts/wrapper.cjs` bootstrap runs the unit-profile doctor before loading TSX. A blocked bootstrap produces empty stdout, a JSON health report on stderr, and exit 2, outside the normalized wrapper-result contract. After bootstrap and parsing succeed, valid wrapper requests run the full smoke-profile doctor before target execution. Use `node scripts/wrapper.cjs` or `npm run --silent wrapper:run` to avoid npm banners.
 
 See [result schema](result-schema.md) for exact semantics and [artifact model](artifact-model.md) for provenance limits. Review points are guidance, not gates.

@@ -5,8 +5,9 @@ This repository implements one bounded Playwright Test execution responsibility.
 ```text
 External human / script / AI caller
   -> request validation
+  -> local pre-flight doctor
   -> literal target and argv construction
-  -> fresh native JSON result destination
+  -> fresh native report and test-output destinations
   -> local Playwright child process
   -> native result inspection + best-effort artifact discovery
   -> normalized JSON result
@@ -14,12 +15,14 @@ External human / script / AI caller
 
 ## Responsibilities
 
+- `scripts/wrapper.cjs`: unit-profile bootstrap before TSX; blocked health goes to stderr outside the normalized result contract.
+- `scripts/doctor.cjs`: local prerequisite probes; valid library requests use the smoke profile before target execution.
 - `contract/validateInputs.ts`: request types, normalization, fixed input policy.
 - `contract/resultSchema.ts`: result types and constructors.
 - `execution/runPlaywrightTarget.ts`: invocation boundary, process handling, current-run report destination, terminal result.
 - `execution/playwrightJudgment.ts`: small Playwright-specific projection of native JSON errors, outcomes, attempts, and totals.
 - `execution/runPlaywrightTargetCli.ts`: argument parsing, JSON output and CLI exit mapping.
-- `artifacts/playwrightArtifacts.ts`: presence checks for shared native report/trace paths.
+- `artifacts/playwrightArtifacts.ts`: presence checks for invocation-scoped native report/trace paths.
 
 ## Boundaries
 
@@ -27,9 +30,9 @@ Callers supply fields, not raw commands. Validated spec paths become escaped lit
 
 Rejected inputs never reach spawning. Passed/failed require current-run native test evidence consistent with the child exit code. No-tests/discovery failures cannot become failed-test judgments. Synchronous launch exceptions are structured; optional artifact scanning cannot replace the primary outcome.
 
-The JSON reporter writes into a fresh invocation-specific directory solely to prevent stale or overlapping machine reports from determining a verdict. Other report paths remain shared/presence-based. See [artifact model](artifact-model.md).
+Native JSON, HTML, JUnit, and test output use a fresh invocation-specific directory. JSON determines the judgment; ancillary reports remain presence-based references within that directory. See [artifact model](artifact-model.md).
 
-CLI syntax failures deliberately remain outside the JSON wrapper-result contract. Human-readable child output uses stderr.
+CLI syntax and bootstrap failures deliberately remain outside the JSON wrapper-result contract. Human-readable child output uses stderr.
 
 ## Trust and scope
 
