@@ -7,8 +7,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 const specialists = [
-  { lane: "security", action: "assess-security", other: "summarize-evidence" },
-  { lane: "reporting", action: "summarize-evidence", other: "assess-security" },
+  { lane: "security", action: "assess-security" },
+  { lane: "reporting", action: "summarize-evidence" },
+  { lane: "contrarian", action: "review-verdict" },
 ] as const;
 type Lane = (typeof specialists)[number]["lane"];
 
@@ -38,7 +39,7 @@ function invoke(root: string, lane: Lane, input: string, flags: string[] = [], e
   });
   if (child.error) throw child.error;
   expect(child.stdout.trim(), child.stderr).not.toBe("");
-  return { status: child.status, finding: JSON.parse(child.stdout) };
+  return { status: child.status, finding: JSON.parse(child.stdout), stdout: child.stdout };
 }
 
 async function withClient(root: string, lane: Lane, env: Record<string, string>, run: (client: Client) => Promise<void>) {
@@ -68,7 +69,7 @@ function evidenceSnapshot(root: string) {
   });
 }
 
-for (const { lane, action, other } of specialists) {
+for (const { lane, action } of specialists) {
   test(`${lane} enforces its single action through JSON stdio and MCP`, async ({}, info) => {
     const root = checkout(info);
     const valid = JSON.stringify({ name: action, arguments: {} });
@@ -94,10 +95,12 @@ for (const { lane, action, other } of specialists) {
       expect(tools[0].inputSchema).toMatchObject({ type: "object", additionalProperties: false });
       expect(tools[0].inputSchema.properties).toEqual({});
       for (const call of [
-        { name: other, arguments: {} },
+        ...specialists.filter(role => role.action !== action).map(role => ({ name: role.action, arguments: {} })),
+        { name: "assess-performance", arguments: {} },
         { name: "publish-report", arguments: {} },
         { name: action, arguments: { project: "smoke" } },
         { name: action, arguments: { rerun: true } },
+        { name: action, arguments: { advance: true } },
         { name: action, arguments: { env: { PW_AGENT_JOB_ID: randomUUID() } } },
         { name: action, arguments: {} },
       ]) {
@@ -113,10 +116,11 @@ for (const { lane, action, other } of specialists) {
   });
 }
 
-test("a clean host job runs security once and the reporter reads only its sealed evidence", async ({}, info) => {
+test("a clean job runs security once and gates the reported verdict against independent evidence", async ({}, info) => {
   test.setTimeout(120_000);
   const root = checkout(info);
-  for (const entry of ["package-lock.json", "playwright.config.ts", "tests/security", "tests/support/board.ts", "examples/task-board"]) {
+  for (const entry of ["package-lock.json", "playwright.config.ts", "tests/security", "tests/performance",
+    "tests/support/board.ts", "tests/support/performanceContext.ts", "examples/task-board"]) {
     fs.cpSync(path.resolve(entry), path.join(root, entry), { recursive: true });
   }
   for (const project of ["unit", "integration", "smoke"]) {
@@ -124,7 +128,12 @@ test("a clean host job runs security once and the reporter reads only its sealed
     fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, "example.spec.ts"), [
       'import { test, expect } from "@playwright/test";',
-      'test("sample check", () => expect(process.env.SAMPLE_RESULT || "pass").toBe("pass"));',
+      'test("sample check", () => {',
+      '  test.fail(process.env.SAMPLE_RESULT === "unexpected-pass", "Fixture annotation");',
+      '  expect(process.env.SAMPLE_RESULT).not.toBe("planned-failure");',
+      '});',
+      'if (process.env.SAMPLE_RESULT === "unplanned-failure")',
+      '  test("only registered during execution", () => expect(1).toBe(2));',
     ].join("\n"));
   }
   const baseEnv = getDefaultEnvironment();
@@ -148,15 +157,24 @@ test("a clean host job runs security once and the reporter reads only its sealed
     expect(child.status, child.stderr).toBe(0);
     return JSON.parse(child.stdout);
   }
-  function captureSuite(folder: string, fail: boolean) {
-    const projects = fail ? ["unit"] : ["unit", "integration", "smoke", "mobile-android", "mobile-ios"];
+  function planJob(): Record<string, string> {
+    const grant = { ...baseEnv, ...host(["init"]) };
+    const plan = execFileSync(process.execPath, ["--import", "tsx", "scripts/review-plan.ts"], {
+      ...options, env: grant, timeout: 30_000,
+    });
+    return { ...grant, ...JSON.parse(plan), PW_AGENT_PRODUCER_PLATFORM: process.platform };
+  }
+  type SuiteMode = "pass" | "planned-failure" | "unplanned-failure" | "unexpected-pass";
+  function captureSuite(folder: string, grant: Record<string, string>, mode: SuiteMode) {
+    const projects = mode === "pass" ? ["unit", "integration", "smoke", "mobile-android", "mobile-ios"] : ["unit"];
     const cli = path.join(root, "node_modules", "playwright", "cli.js");
     const suite = spawnSync(process.execPath, [cli, "test", "--reporter=json", "--workers=1", ...projects.map(p => "--project=" + p)], {
-      ...options, env: { ...baseEnv, SAMPLE_RESULT: fail ? "fail" : "pass", PLAYWRIGHT_JSON_OUTPUT_FILE: path.join(folder, "suite.json") },
+      ...options, env: { ...baseEnv, SAMPLE_RESULT: mode, PW_EVIDENCE_JOB_ID: grant.PW_AGENT_JOB_ID,
+        PW_EVIDENCE_REVISION: grant.PW_AGENT_REVISION, PLAYWRIGHT_JSON_OUTPUT_FILE: path.join(folder, "suite.json") },
       timeout: 40_000,
     });
     if (suite.error) throw suite.error;
-    expect(suite.status, suite.stderr).toBe(fail ? 1 : 0);
+    expect(suite.status, suite.stderr).toBe(mode === "pass" ? 0 : 1);
   }
 
   const artifacts = path.join(root, "artifacts");
@@ -168,22 +186,28 @@ test("a clean host job runs security once and the reporter reads only its sealed
   expect(fs.readdirSync(elsewhere)).toEqual([]);
   fs.unlinkSync(path.join(artifacts, "reporting"));
 
-  const grant = { ...baseEnv, ...host(["init"]) };
+  const grant = planJob();
   const folder = path.join(root, "artifacts", "reporting", grant.PW_AGENT_JOB_ID);
   const securityRequest = '{"name":"assess-security","arguments":{}}';
   const reportRequest = '{"name":"summarize-evidence","arguments":{}}';
+  const reviewRequest = '{"name":"review-verdict","arguments":{}}';
   const checked = invoke(root, "security", securityRequest, [], grant);
   expect(checked).toMatchObject({ status: 0, finding: { status: "checks_passed", nativeStatus: "passed" } });
   const nativeFile = path.join(root, checked.finding.report.path);
   expect(createHash("sha256").update(fs.readFileSync(nativeFile)).digest("hex")).toBe(checked.finding.report.sha256);
-  fs.writeFileSync(path.join(folder, "security.json"), JSON.stringify(checked.finding));
+  fs.writeFileSync(path.join(folder, "security.json"), checked.stdout);
   const afterCheck = evidenceSnapshot(root);
   await withClient(root, "security", grant, async client => {
     expect(await callFinding(client, "assess-security", {})).toMatchObject({ isError: true, finding: { status: "denied" } });
   });
   expect(evidenceSnapshot(root)).toEqual(afterCheck);
 
-  captureSuite(folder, false);
+  captureSuite(folder, grant, "pass");
+  const enrollment = execFileSync(process.execPath, ["scripts/wrapper.cjs", "--project", "performance", "--spec",
+    "tests/performance/task-timing.spec.ts", "--workers", "1"], {
+    ...options, env: grant, timeout: 45_000, stdio: ["ignore", "pipe", "pipe"],
+  });
+  fs.writeFileSync(path.join(folder, "enrollment-receipt.json"), enrollment);
   const sealed = { ...grant, ...host(["seal", "not-scheduled", "0"], grant) };
   const beforeReport = evidenceSnapshot(root);
   expect(runHost(["seal", "required", "1"], grant).status).toBe(2);
@@ -194,16 +218,85 @@ test("a clean host job runs security once and the reporter reads only its sealed
   });
   expect(evidenceSnapshot(root)).toEqual(beforeReport);
 
+  fs.writeFileSync(path.join(folder, "summary.json"), report.stdout);
+  const reviewer = { ...sealed, ...host(["review-inputs", "initial-enrollment"], sealed), PW_AGENT_UPSTREAM_RESULT: "success" };
+  const beforeReview = evidenceSnapshot(root);
+  const approval = invoke(root, "contrarian", reviewRequest, [], reviewer);
+  expect(approval, JSON.stringify(approval.finding)).toMatchObject({
+    status: 0, finding: { status: "approved", advance: true, reportedStatus: "passed", confirmedFailures: [] },
+  });
+  await withClient(root, "contrarian", reviewer, async client => {
+    expect(await callFinding(client, "review-verdict", {})).toEqual({ isError: false, finding: approval.finding });
+  });
+  const unexplained = invoke(root, "contrarian", reviewRequest, [], { ...reviewer, PW_AGENT_UPSTREAM_RESULT: "failure" });
+  expect(unexplained).toMatchObject({
+    status: 2, finding: { status: "needs_review", advance: false, reportedStatus: "passed", confirmedFailures: [] },
+  });
+  expect(unexplained.finding.challenges.length).toBeGreaterThan(0);
+  for (const binding of ["PW_AGENT_REVIEW_PLAN_SHA256", "PW_AGENT_PRODUCER_PLATFORM"]) {
+    const incomplete: Record<string, string> = { ...reviewer };
+    delete incomplete[binding];
+    expect(invoke(root, "contrarian", reviewRequest, [], incomplete), binding)
+      .toMatchObject({ status: 2, finding: { status: "needs_review", advance: false, confirmedFailures: [] } });
+  }
+  expect(evidenceSnapshot(root)).toEqual(beforeReview);
+
+  // A host can pin the exact bytes of a mistaken report. The native evidence still governs.
+  const mistaken = JSON.stringify({ ...report.finding, status: "failed" }) + "\n";
+  fs.writeFileSync(path.join(folder, "summary.json"), mistaken);
+  const submitted = { ...reviewer, PW_AGENT_REVIEW_SUMMARY_SHA256: createHash("sha256").update(mistaken).digest("hex") };
+  expect(invoke(root, "contrarian", reviewRequest, [], submitted)).toMatchObject({
+    status: 2, finding: { status: "needs_review", advance: false, reportedStatus: "failed", confirmedFailures: [],
+      challenges: expect.arrayContaining(["summary_disagrees_with_evidence", "reported_failure_unconfirmed"]) },
+  });
+  fs.writeFileSync(path.join(folder, "summary.json"), report.stdout);
+
   fs.appendFileSync(path.join(folder, "suite.json"), " ");
   expect(invoke(root, "reporting", reportRequest, [], sealed))
     .toMatchObject({ status: 2, finding: { status: "inconclusive", suite: { status: "invalid" } } });
+  expect(invoke(root, "contrarian", reviewRequest, [], reviewer))
+    .toMatchObject({ status: 2, finding: { status: "needs_review", advance: false, confirmedFailures: [] } });
 
-  const next = { ...baseEnv, ...host(["init"]) };
-  captureSuite(path.join(root, "artifacts", "reporting", next.PW_AGENT_JOB_ID), true);
-  const partial = { ...next, ...host(["seal", "not-scheduled", "1"], next) };
-  expect(invoke(root, "reporting", reportRequest, [], partial))
-    .toMatchObject({ status: 1, finding: { status: "failed", security: { status: "missing" } } });
+  function failedJob(mode: Exclude<SuiteMode, "pass">): Record<string, string> {
+    const job = planJob();
+    const folder = path.join(artifacts, "reporting", job.PW_AGENT_JOB_ID);
+    captureSuite(folder, job, mode);
+    const sealed = { ...job, ...host(["seal", "required", "1"], job) };
+    const report = invoke(root, "reporting", reportRequest, [], sealed);
+    expect(report).toMatchObject({ status: 1, finding: { status: "failed", security: { status: "missing" } } });
+    fs.writeFileSync(path.join(folder, "summary.json"), report.stdout);
+    return { ...sealed, ...host(["review-inputs", "required"], sealed), PW_AGENT_UPSTREAM_RESULT: "failure" };
+  }
+  const partial = failedJob("planned-failure");
+  const beforeConfirmation = evidenceSnapshot(root);
+  const confirmation = invoke(root, "contrarian", reviewRequest, [], partial);
+  expect(confirmation, JSON.stringify(confirmation.finding)).toMatchObject({
+    status: 1, finding: { status: "failure_confirmed", advance: false, reportedStatus: "failed", confirmedFailures: ["suite"] },
+  });
+  expect(evidenceSnapshot(root)).toEqual(beforeConfirmation);
+
+  const partialSummary = path.join(artifacts, "reporting", partial.PW_AGENT_JOB_ID, "summary.json");
+  const falseGreen = JSON.stringify({ ...JSON.parse(fs.readFileSync(partialSummary, "utf8")), status: "passed", knownFailures: [] });
+  fs.writeFileSync(partialSummary, falseGreen);
+  const greenClaim = { ...partial, PW_AGENT_UPSTREAM_RESULT: "success",
+    PW_AGENT_REVIEW_SUMMARY_SHA256: createHash("sha256").update(falseGreen).digest("hex") };
+  expect(invoke(root, "contrarian", reviewRequest, [], greenClaim)).toMatchObject({
+    status: 1, finding: { status: "failure_confirmed", advance: false, reportedStatus: "passed", confirmedFailures: ["suite"],
+      challenges: expect.arrayContaining(["summary_disagrees_with_evidence", "green_with_confirmed_failure"]) },
+  });
+
+  for (const [mode, challenge] of [
+    ["unplanned-failure", "discovery_mismatch"], ["unexpected-pass", "expected_failure_annotations"],
+  ] as const) {
+    const decision = invoke(root, "contrarian", reviewRequest, [], failedJob(mode));
+    expect(decision, JSON.stringify(decision.finding)).toMatchObject({
+      status: 2, finding: { status: "needs_review", advance: false, reportedStatus: "failed",
+        confirmedFailures: [], challenges: expect.arrayContaining([challenge]) },
+    });
+  }
 
   fs.appendFileSync(path.join(root, "tests", "unit", "example.spec.ts"), "\n");
   expect(invoke(root, "reporting", reportRequest, [], partial)).toMatchObject({ status: 2, finding: { status: "denied" } });
+  expect(invoke(root, "contrarian", reviewRequest, [], partial))
+    .toMatchObject({ status: 2, finding: { status: "denied", advance: false } });
 });

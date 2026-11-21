@@ -69,16 +69,48 @@ export function parseManifest(value: unknown, job: Job): Manifest {
   return { suite, security, performance: { expected, sha256 } };
 }
 
-const inputFiles = ["manifest.json", "suite.json", "security.json", "performance.json"] as const;
-export type InputFile = typeof inputFiles[number];
+export const reviewNativePins = {
+  "security-native.json": "PW_AGENT_REVIEW_SECURITY_SHA256",
+  "baseline-native.json": "PW_AGENT_REVIEW_BASELINE_SHA256",
+  "candidate-1-native.json": "PW_AGENT_REVIEW_CANDIDATE_1_SHA256",
+  "candidate-2-native.json": "PW_AGENT_REVIEW_CANDIDATE_2_SHA256",
+  "enrollment-native.json": "PW_AGENT_REVIEW_ENROLLMENT_SHA256",
+} as const;
+export type NativeFile = keyof typeof reviewNativePins;
+const inputFiles = ["manifest.json", "suite.json", "security.json", "performance.json", "summary.json", "suite-plan.json",
+  "enrollment-receipt.json"] as const;
+export type InputFile = typeof inputFiles[number] | NativeFile;
 
 /** Names come from the wrapper. Neither requests nor evidence can introduce a path. */
 export function readEvidenceBytes(root: string, job: Job, name: InputFile, maxBytes: number): Buffer {
-  requireEvidence(jobIdPattern.test(job.jobId) && inputFiles.includes(name), "unsafe_artifact_path");
+  requireEvidence(jobIdPattern.test(job.jobId) && (inputFiles.some(file => file === name) || Object.hasOwn(reviewNativePins, name)),
+    "unsafe_artifact_path");
+  return readArtifact(root, ["artifacts", "reporting", job.jobId], name, maxBytes);
+}
+
+/** A specialist receipt may identify only an actual wrapper reservation. The preparer's baseline uses an absolute path. */
+export function readWrapperReport(root: string, reference: unknown, kind: "receipt" | "baseline"): Buffer {
+  requireEvidence(typeof reference === "string", "invalid_wrapper_reference");
+  const checkout = fs.realpathSync.native(root);
+  let relative = reference;
+  if (kind === "baseline") {
+    const prefix = checkout.endsWith(path.sep) ? checkout : checkout + path.sep;
+    requireEvidence(reference.startsWith(prefix), "invalid_wrapper_reference");
+    relative = reference.slice(prefix.length).split(path.sep).join("/");
+  }
+  const match = /^artifacts\/(wrapper-result-[A-Za-z0-9]{6})\/results\.json$/.exec(relative);
+  requireEvidence(match && (kind === "receipt" || reference === path.join(checkout, "artifacts", match[1], "results.json")),
+    "invalid_wrapper_reference");
+  return readArtifact(checkout, ["artifacts", match[1]], "results.json", maxNativeBytes);
+}
+
+export const maxNativeBytes = 2 * 1024 * 1024;
+
+function readArtifact(root: string, directories: string[], name: string, maxBytes: number): Buffer {
   let fd: number | undefined;
   try {
     let directory = fs.realpathSync.native(root);
-    for (const segment of ["artifacts", "reporting", job.jobId]) {
+    for (const segment of directories) {
       directory = path.join(directory, segment);
       requireEvidence(fs.lstatSync(directory).isDirectory(), "unsafe_artifact_path");
     }
@@ -114,9 +146,18 @@ export function readEvidenceBytes(root: string, job: Job, name: InputFile, maxBy
   }
 }
 
-export function readPinnedJson(root: string, job: Job, name: InputFile, pin: string, maxBytes: number): unknown {
+export function readPinnedBytes(root: string, job: Job, name: InputFile, pin: string, maxBytes: number): Buffer {
+  requireEvidence(isDigest(pin), "digest_mismatch");
   const bytes = readEvidenceBytes(root, job, name, maxBytes);
   requireEvidence(createHash("sha256").update(bytes).digest("hex") === pin, "digest_mismatch");
+  return bytes;
+}
+
+export function parseEvidenceJson(bytes: Buffer): unknown {
   try { return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)); }
   catch { throw new EvidenceIssue("invalid", "invalid_json"); }
+}
+
+export function readPinnedJson(root: string, job: Job, name: InputFile, pin: string, maxBytes: number): unknown {
+  return parseEvidenceJson(readPinnedBytes(root, job, name, pin, maxBytes));
 }
