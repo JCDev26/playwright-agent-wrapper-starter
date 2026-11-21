@@ -177,7 +177,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
-      advance: ${{ steps.review.outputs.advance }}
+      advance: ${{ steps.review.outputs.advance == 'true' && steps.receipt.outcome == 'success' && steps.explain.outcome == 'success' }}
     env:
       PW_AGENT_UPSTREAM_RESULT: ${{ needs.collect.result }}
       PW_AGENT_JOB_ID: ${{ needs.collect.outputs.job_id }}
@@ -232,6 +232,7 @@ jobs:
           fi
           exit "$status"
       - name: Retain the contrarian verdict
+        id: receipt
         if: ${{ !cancelled() && steps.review.outcome != 'skipped' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -240,6 +241,7 @@ jobs:
           retention-days: 7
           if-no-files-found: error
       - name: Explain the final gate
+        id: explain
         if: ${{ !cancelled() && steps.review.outcome != 'skipped' }}
         run: |
           node --import tsx scripts/contrarian-summary.ts < "$RUNNER_TEMP/contrarian.json" >> "$GITHUB_STEP_SUMMARY"

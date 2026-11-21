@@ -53,11 +53,12 @@ export function reviewSuite(plan: unknown, native: unknown, producerPlatform: st
   let missing = 0, extra = 0, acceptedSkips = 0, otherSkips = 0, flaky = 0, expectedFailures = 0, plannedFailures = 0;
   for (const identity of scheduled.keys()) if (!observed.has(identity)) missing++;
   for (const [identity, test] of observed) {
-    if (!scheduled.has(identity)) extra++;
-    if (scheduled.get(identity)?.expected === "passed" && test.expected === "passed" && test.outcome === "unexpected" &&
+    const planned = scheduled.get(identity);
+    if (!planned) extra++;
+    if (planned?.expected === "passed" && test.expected === "passed" && test.outcome === "unexpected" &&
         (test.terminalStatus === "failed" || test.terminalStatus === "timedOut")) plannedFailures++;
     if (test.outcome === "flaky") flaky++;
-    if (test.expected === "failed" || test.expected === "timedOut") expectedFailures++;
+    if ([planned?.expected, test.expected].some(status => status === "failed" || status === "timedOut")) expectedFailures++;
     if (test.outcome === "skipped") {
       const allowed = test.expected === "skipped" && policy.allowedSkips.some(rule =>
         rule.platform === producerPlatform && rule.project === test.project && rule.file === test.file &&

@@ -37,4 +37,7 @@ test("distinguishes actual planned failures, retries and expected-failure annota
     spec("C", "unexpected", "failed", "passed"), spec("unknown", "unexpected", "passed", "failed")]);
   expect(reviewSuite(plan, actual, "linux")).toMatchObject({ plannedFailures: 1, extra: 1, flaky: 1, expectedFailures: 1,
     challenges: ["discovery_mismatch", "flaky_tests", "expected_failure_annotations"] });
+  const annotatedAtDiscovery = report([spec("C", "expected", "failed")]);
+  expect(reviewSuite(annotatedAtDiscovery, report([spec("C")]), "linux"))
+    .toMatchObject({ expectedFailures: 1, challenges: ["expected_failure_annotations"] });
 });
