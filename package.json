@@ -9,6 +9,9 @@
   "scripts": {
     "agent:prepare": "tsx src/playwright-wrapper/performance/prepareMain.ts",
     "agent:performance": "tsx src/playwright-wrapper/performance/cli.ts",
+    "agent:security": "tsx src/playwright-wrapper/security/cli.ts",
+    "agent:reporting": "tsx src/playwright-wrapper/reporting/cli.ts",
+    "agent:contrarian": "tsx src/playwright-wrapper/contrarian/cli.ts",
     "test": "node scripts/test.cjs",
     "test:headed": "node scripts/test.cjs --headed",
     "test:smoke": "node scripts/test.cjs --project=smoke",
@@ -21,6 +24,7 @@
     "demo": "tsx examples/task-board/server.ts",
     "test:mobile": "node scripts/test.cjs --project=mobile-android --project=mobile-ios",
     "test:performance": "node scripts/test.cjs --project=performance",
+    "test:security": "node scripts/test.cjs --project=security",
     "test:load": "tsx examples/load/run.ts",
     "test:ci": "node scripts/test.cjs --project=unit --project=integration --project=smoke --project=mobile-android --project=mobile-ios"
   },

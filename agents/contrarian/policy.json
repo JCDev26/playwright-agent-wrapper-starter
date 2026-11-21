@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "action": "review-verdict",
+  "maxFlakyTests": 0,
+  "allowedSkips": [
+    {
+      "platform": "win32",
+      "project": "integration",
+      "file": "tests/integration/wrapperHardening.spec.ts",
+      "describe": [],
+      "title": "literal selection does not inherit case-insensitive regex matching"
+    }
+  ]
+}

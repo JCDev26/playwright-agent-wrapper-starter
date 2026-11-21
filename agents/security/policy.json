@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "action": "assess-security",
+  "target": {
+    "project": "security",
+    "spec": "tests/security/task-board.spec.ts",
+    "workers": 1,
+    "headed": false
+  },
+  "checks": [
+    { "id": "literal-task-title", "title": "renders a markup-like title as literal text" },
+    { "id": "invalid-update-preserves-task", "title": "rejects an invalid completion value and preserves the task" },
+    { "id": "task-api-no-store", "title": "instructs caches to avoid storing task list responses" }
+  ]
+}

@@ -2,6 +2,8 @@
 
 The wrapper is human-reviewable. It suggests inspection points but never pauses for mandatory approval or records a completed human review.
 
+The final CI gate issues technical permission for dependent jobs to proceed. A maintainer controls review of policy changes, branch rules and release approval. [Contrarian gate](contrarian-agent.md)
+
 ## Recommended review
 
 1. Read `status` and `error.code`; `ok` alone is not a test verdict.

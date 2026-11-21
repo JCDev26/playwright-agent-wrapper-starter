@@ -18,11 +18,18 @@ export interface Observation {
   context: Record<ComparisonField, string>;
 }
 
-/** Read only the inline timing attachment. A path or URL inside a report has no authority. */
-export function readObservation(file: string, pinnedHash?: string): Observation {
+const maxReportBytes = 2 * 1024 * 1024;
+
+function readReportFile(file: string): Buffer {
   const stat = statSync(file);
-  if (!stat.isFile() || stat.size > 2 * 1024 * 1024) throw new Error("Invalid report size");
-  const bytes = readFileSync(file);
+  if (!stat.isFile() || stat.size > maxReportBytes) throw new Error("Invalid report size");
+  return readFileSync(file);
+}
+
+/** Read only the inline timing attachment. A path or URL inside a report has no authority. */
+export function readObservation(source: string | Buffer, pinnedHash?: string): Observation {
+  const bytes = typeof source === "string" ? readReportFile(source) : source;
+  if (!Buffer.isBuffer(bytes) || !bytes.length || bytes.length > maxReportBytes) throw new Error("Invalid report size");
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   if (pinnedHash !== undefined && sha256 !== pinnedHash) throw new Error("Baseline digest mismatch");
   const report: JSONReport = JSON.parse(bytes.toString("utf8"));
