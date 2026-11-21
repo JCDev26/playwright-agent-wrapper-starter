@@ -54,6 +54,7 @@ jobs:
           echo '{"name":"assess-performance","arguments":{}}' | node --import tsx src/playwright-wrapper/performance/cli.ts | tee artifacts/performance-finding.json
 
       - name: Retain current validation evidence
+        id: evidence
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -61,3 +62,14 @@ jobs:
           path: artifacts/
           retention-days: 7
           if-no-files-found: warn
+
+      - name: Summarize the performance finding
+        if: ${{ !cancelled() && steps.baseline.outputs.ready == 'true' }}
+        env:
+          EVIDENCE_URL: ${{ steps.evidence.outputs.artifact-url }}
+        run: |
+          if [[ -s artifacts/performance-finding.json ]]; then
+            node --import tsx scripts/performance-summary.ts < artifacts/performance-finding.json >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No performance finding was produced. See the comparison step for diagnostics." >> "$GITHUB_STEP_SUMMARY"
+          fi
