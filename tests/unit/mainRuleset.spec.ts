@@ -7,7 +7,7 @@ function reconcile(scenario: string) {
     const scenario = ${JSON.stringify(scenario)}, policy = ${JSON.stringify(policy)};
     let tipReads = 0;
     globalThis.fetch = async (url, init) => {
-      const route = new URL(url).pathname.split("playwright-agent-wrapper-starter/")[1];
+      const route = new URL(url).pathname.split("/").slice(4).join("/");
       let result;
       if (route === "branches/main") result = { commit: { sha: ++tipReads > 1 && scenario === "advanced" ? "new" : "tip" } };
       else if (route.includes("workflows/ci.yml")) result = { workflow_runs: [{ id: 10, run_attempt: 2, head_sha: "tip", conclusion: "success" }] };

@@ -1,0 +1,9 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    ignore:
+      # The gh-aw compiler pins its matching runtime actions.
+      - dependency-name: "github/gh-aw-actions/*"
