@@ -12,6 +12,8 @@ type ComparisonField = (typeof comparisonFields)[number];
 export interface Observation {
   sha256: string;
   revision: string;
+  harnessRevision: string;
+  initialTasks: number;
   medianMs: number;
   context: Record<ComparisonField, string>;
 }
@@ -40,6 +42,8 @@ export function readObservation(file: string, pinnedHash?: string): Observation 
     throw new Error("Expected inline task timing");
   const data = JSON.parse(Buffer.from(timing[0].body, "base64").toString("utf8"));
   if (data.metric !== policy.metric || data.unit !== "ms" || data.project !== policy.target.project ||
+      data.initialTasks !== policy.initialTasks || typeof data.harnessRevision !== "string" ||
+      !/^[0-9a-f]{40}$/.test(data.harnessRevision) ||
       data.browserEngine !== "chromium" || typeof data.revision !== "string" || !/^[0-9a-f]{40}$/.test(data.revision) ||
       typeof data.benchmarkHash !== "string" || !/^[0-9a-f]{64}$/.test(data.benchmarkHash))
     throw new Error("Incomplete benchmark provenance");
@@ -56,7 +60,7 @@ export function readObservation(file: string, pinnedHash?: string): Observation 
     if (typeof data[field] !== "string" || !data[field].trim()) throw new Error("Missing comparison context");
     context[field] = data[field];
   }
-  return { revision: data.revision, sha256, medianMs, context };
+  return { revision: data.revision, harnessRevision: data.harnessRevision, initialTasks: data.initialTasks, sha256, medianMs, context };
 }
 
 export function differingFields(a: Observation, b: Observation): ComparisonField[] {

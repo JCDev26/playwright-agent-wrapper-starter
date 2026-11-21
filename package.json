@@ -7,6 +7,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "agent:prepare": "tsx src/playwright-wrapper/performance/prepareMain.ts",
     "agent:performance": "tsx src/playwright-wrapper/performance/cli.ts",
     "test": "node scripts/test.cjs",
     "test:headed": "node scripts/test.cjs --headed",

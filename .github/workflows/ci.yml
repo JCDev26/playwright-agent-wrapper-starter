@@ -11,6 +11,7 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   verify:
@@ -20,6 +21,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version-file: ".nvmrc"
@@ -29,8 +31,27 @@ jobs:
       - run: npm run doctor
       - run: npm run typecheck
       - run: npm run test:ci
-      - name: Record isolated browser timings
-        run: node scripts/wrapper.cjs --project performance --workers 1
+      - name: Measure the last accepted main on this runner
+        id: baseline
+        if: github.event_name == 'push' || github.base_ref == 'main'
+        env:
+          PW_MAIN_READ_TOKEN: ${{ github.token }}
+        run: |
+          status=0
+          node --import tsx src/playwright-wrapper/performance/prepareMain.ts > "$RUNNER_TEMP/performance-binding.json" || status=$?
+          if [[ "$status" == 3 && "$GITHUB_EVENT_NAME" == push ]]; then
+            node scripts/wrapper.cjs --project performance --spec tests/performance/task-timing.spec.ts --workers 1
+            echo "Initial baseline enrollment. No accepted predecessor exists." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [[ "$status" != 0 ]]; then exit "$status"; fi
+          jq -r 'to_entries[] | "\(.key)=\(.value)"' "$RUNNER_TEMP/performance-binding.json" >> "$GITHUB_ENV"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+      - name: Compare the candidate with accepted main
+        if: steps.baseline.outputs.ready == 'true'
+        shell: bash
+        run: |
+          echo '{"name":"assess-performance","arguments":{}}' | node --import tsx src/playwright-wrapper/performance/cli.ts | tee artifacts/performance-finding.json
 
       - name: Retain current validation evidence
         if: ${{ !cancelled() }}

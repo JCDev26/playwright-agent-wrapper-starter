@@ -5,11 +5,12 @@ import os from "node:os";
 
 export function performanceContext(browserEngine: string) {
   const hash = createHash("sha256");
-  for (const file of ["tests/performance/task-timing.spec.ts", "tests/support/board.ts", "tests/support/performanceContext.ts", "playwright.config.ts"]) {
+  for (const file of ["tests/performance/task-timing.spec.ts", "tests/support/board.ts", "tests/support/performanceContext.ts"]) {
     hash.update(file).update("\0").update(readFileSync(file, "utf8").replaceAll("\r\n", "\n")).update("\0");
   }
   return {
-    revision: cleanRevision(),
+    revision: cleanRevision(process.env.PW_PERF_REFERENCE_ROOT),
+    harnessRevision: cleanRevision(),
     benchmarkHash: hash.digest("hex"),
     browserEngine,
     playwright: require("@playwright/test/package.json").version as string,

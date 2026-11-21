@@ -12,6 +12,7 @@ function report(file: string, medianMs = 10, overrides = {}) {
     browserEngine: "chromium", browser: "123", platform: "linux", architecture: "x64",
     osRelease: "1", node: "22", playwright: "1.65.1", runnerClass: "fixture-runner",
     benchmarkHash: "a".repeat(64), project: "performance", conditions: "one warm-up", revision: "1".repeat(40),
+    harnessRevision: "1".repeat(40), initialTasks: policy.initialTasks,
     ...overrides,
   };
   const body = Buffer.from(JSON.stringify(data)).toString("base64");
@@ -31,7 +32,8 @@ function report(file: string, medianMs = 10, overrides = {}) {
 function fixture() {
   const baseline = path.resolve("baseline.json");
   const env = { PW_AGENT_JOB_ID: randomUUID(), PW_AGENT_REVISION: "1".repeat(40),
-    PW_AGENT_BASELINE_FILE: baseline, PW_AGENT_BASELINE_SHA256: report(baseline) };
+    PW_AGENT_MAIN_REVISION: "2".repeat(40), PW_AGENT_MAIN_CI_RUN: "123",
+    PW_AGENT_BASELINE_FILE: baseline, PW_AGENT_BASELINE_SHA256: report(baseline, 10, { revision: "2".repeat(40) }) };
   let calls = 0;
   function assess(medians: number[], overrides = {}) {
     return assessPerformance(tool.name, {}, env, target => {
@@ -59,7 +61,7 @@ test("rejects unknown tools and overrides before consuming a job or running test
   for (const [name, args] of [
     ["set-baseline", {}], [tool.name, { command: "other" }], [tool.name, { project: "smoke" }],
     [tool.name, { budget: 100 }], [tool.name, { env: {} }], [tool.name, { baseline: "other" }],
-    [tool.name, null], [tool.name, []],
+    [tool.name, { initialTasks: 0 }], [tool.name, null], [tool.name, []],
   ] as const) {
     expect(assessPerformance(name, args, env, () => { throw new Error("unauthorized execution"); }).status).toBe("denied");
   }
@@ -73,6 +75,22 @@ test("a changed baseline or missing host grant cannot start a run", () => {
   fs.appendFileSync(env.PW_AGENT_BASELINE_FILE, " ");
   expect(assessPerformance(tool.name, {}, env, never, () => null).status).toBe("denied");
   expect(assessPerformance(tool.name, {}, env, never, () => env.PW_AGENT_REVISION).status).toBe("insufficient_evidence");
+});
+
+test("a pinned report for the wrong main revision or harness cannot authorize a comparison", () => {
+  const { env } = fixture();
+  const never = () => { throw new Error("unexpected execution"); };
+  for (const change of [{ PW_AGENT_MAIN_REVISION: "3".repeat(40) }, { PW_AGENT_MAIN_CI_RUN: "" }]) {
+    expect(assessPerformance(tool.name, {}, { ...env, ...change }, never, () => env.PW_AGENT_REVISION).status)
+      .toBe("insufficient_evidence");
+  }
+  env.PW_AGENT_BASELINE_SHA256 = report(env.PW_AGENT_BASELINE_FILE, 10, {
+    revision: env.PW_AGENT_MAIN_REVISION, harnessRevision: "4".repeat(40),
+  });
+  expect(assessPerformance(tool.name, {}, env, never, () => env.PW_AGENT_REVISION).status).toBe("insufficient_evidence");
+  expect(assessPerformance(tool.name, {}, { ...env, PW_PERF_REFERENCE_ROOT: "other" }, never, () => env.PW_AGENT_REVISION).status)
+    .toBe("denied");
+  expect(fs.existsSync("artifacts")).toBe(false);
 });
 
 for (const [medians, expected] of [
@@ -89,7 +107,7 @@ for (const [medians, expected] of [
 test("compares the same browser and runner, and requires verifiable samples and revision", () => {
   for (const override of [
     { browser: "different" }, { runnerClass: "other" }, { benchmarkHash: "b".repeat(64) },
-    { samplesMs: [1] }, { medianMs: 999 }, { revision: null },
+    { samplesMs: [1] }, { medianMs: 999 }, { revision: null }, { initialTasks: 500 }, { harnessRevision: "4".repeat(40) },
   ]) {
     const f = fixture();
     expect(f.assess([10], override).status).toBe("insufficient_evidence");

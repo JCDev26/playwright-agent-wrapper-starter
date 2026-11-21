@@ -7,7 +7,7 @@ import { cleanRevision } from "./revision";
 
 export const tool = {
   name: policy.action,
-  description: "Assess the governed task-board benchmark against the operator-pinned baseline.",
+  description: "Assess task submission against the last CI-accepted main revision at the job's cutoff.",
   inputSchema: { type: "object" as const, properties: {}, additionalProperties: false as const },
 };
 
@@ -23,7 +23,7 @@ interface RunEvidence {
 export function assessPerformance(name: unknown, args: unknown, env = process.env,
   run = runPlaywrightTarget, revision = cleanRevision) {
   const runs: RunEvidence[] = [];
-  let baseline: Pick<Observation, "revision" | "sha256" | "medianMs"> | undefined;
+  let baseline: (Pick<Observation, "revision" | "sha256" | "medianMs" | "initialTasks" | "harnessRevision"> & { acceptanceRun: string }) | undefined;
   let limitMs: number | undefined;
   type Status = "denied" | "insufficient_evidence" | "within_budget" | "regression_reproduced";
   const result = (status: Status, reason: string) => ({
@@ -36,18 +36,25 @@ export function assessPerformance(name: unknown, args: unknown, env = process.en
   const job = env.PW_AGENT_JOB_ID;
   const file = env.PW_AGENT_BASELINE_FILE;
   const pin = env.PW_AGENT_BASELINE_SHA256;
+  const mainRevision = env.PW_AGENT_MAIN_REVISION;
+  const acceptanceRun = env.PW_AGENT_MAIN_CI_RUN;
   if (!job || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(job))
     return result("denied", "A host-issued job UUID is required.");
   const approvedRevision = env.PW_AGENT_REVISION;
   if (!approvedRevision || !/^[0-9a-f]{40}$/.test(approvedRevision) || revision() !== approvedRevision)
     return result("denied", "The clean checkout must match the candidate revision authorized by the host.");
-  if (!file || !path.isAbsolute(file) || !pin || !/^[0-9a-f]{64}$/.test(pin))
-    return result("insufficient_evidence", "The host must bind an absolute baseline file and its approved SHA-256.");
+  if (env.PW_PERF_REFERENCE_ROOT) return result("denied", "Candidate execution cannot override the application checkout.");
+  if (!file || !path.isAbsolute(file) || !pin || !/^[0-9a-f]{64}$/.test(pin) ||
+      !mainRevision || !/^[0-9a-f]{40}$/.test(mainRevision) || !acceptanceRun || !/^[1-9][0-9]*$/.test(acceptanceRun))
+    return result("insufficient_evidence", "Prepare a baseline from accepted main for this job.");
 
   let reference: Observation;
   try {
     reference = readObservation(file, pin);
-    baseline = { revision: reference.revision, sha256: reference.sha256, medianMs: reference.medianMs };
+    if (reference.revision !== mainRevision || reference.harnessRevision !== approvedRevision)
+      return result("insufficient_evidence", "Baseline evidence must identify accepted main and the approved comparison harness.");
+    baseline = { revision: reference.revision, sha256: reference.sha256, medianMs: reference.medianMs,
+      initialTasks: reference.initialTasks, harnessRevision: reference.harnessRevision, acceptanceRun };
   } catch {
     return result("insufficient_evidence", "The pinned baseline is unavailable, invalid, or lacks clean revision evidence.");
   }
@@ -77,7 +84,7 @@ export function assessPerformance(name: unknown, args: unknown, env = process.en
     Object.assign(evidence, { sha256: observation.sha256, medianMs: observation.medianMs, revision: observation.revision });
     const mismatch = differingFields(reference, observation);
     if (mismatch.length) return result("insufficient_evidence", "Non-comparable fields: " + mismatch.join(", "));
-    if (observation.revision !== approvedRevision || revision() !== approvedRevision)
+    if (observation.revision !== approvedRevision || observation.harnessRevision !== approvedRevision || revision() !== approvedRevision)
       return result("insufficient_evidence", "The measured revision does not match the host authorization.");
     if (observation.sha256 === reference.sha256 ||
         (index === 1 && (observation.sha256 === runs[0].sha256 || observation.revision !== runs[0].revision)))

@@ -29,7 +29,7 @@ When adopting this in your codebase, point the fixture at your application and s
 | `npm run test:performance` | One warm-up and ten measured submissions in Chromium, with the raw durations and median attached to the HTML report. |
 | `npm run test:load` | Starts a private task API and runs k6 at five create/list/delete journeys per second for 15 seconds. Requires the [k6 executable](https://grafana.com/docs/k6/latest/set-up/install-k6/) on PATH. |
 
-The [Playwright config](playwright.config.ts) uses opt-in projects for mobile and performance. CI explicitly selects the mobile projects and records performance in its own invocation. Try `npx playwright test --project=smoke --shuffle` to check test isolation. Repeat with the printed seed to investigate an order-dependent failure.
+The [Playwright config](playwright.config.ts) uses opt-in projects for mobile and performance. CI explicitly selects the mobile projects and compares performance in isolated invocations. Try `npx playwright test --project=smoke --shuffle` to check test isolation. Repeat with the printed seed to investigate an order-dependent failure.
 
 ## Interpret the measurements
 
@@ -41,7 +41,7 @@ The [Playwright config](playwright.config.ts) uses opt-in projects for mobile an
 
 ## Use the same test with an AI assistant
 
-The [performance agent](docs/performance-agent.md) gives Codex or another client one governed tool over MCP or JSON stdio. The operator pins a reference report and candidate revision. The wrapper enforces the test scope and decides when a slower result needs confirmation.
+The [performance agent](docs/performance-agent.md) gives Codex or another client one governed tool over MCP or JSON stdio. The host measures the last CI-accepted main revision and the candidate on the same runner, starting both boards with 50 tasks. Adding tests does not change the per-submission budget. The wrapper enforces the test scope and decides when a slower result needs confirmation.
 
 Start with the [planner, generator and failure-diagnosis exercise](docs/ai-workflow.md). It includes a seed, a human-readable plan and a reproducible product regression. The default suite runs without a model or credentials.
 
