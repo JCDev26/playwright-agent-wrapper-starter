@@ -19,7 +19,11 @@ export function readPlaywrightJudgment(
   reportPath: string,
   exitCode: number,
 ): "passed" | "failed" {
-  const report = object(JSON.parse(fs.readFileSync(reportPath, "utf8")));
+  return judgePlaywrightReport(JSON.parse(fs.readFileSync(reportPath, "utf8")), exitCode);
+}
+
+export function judgePlaywrightReport(value: unknown, exitCode: number): "passed" | "failed" {
+  const report = object(value);
   if (array(report.errors).length > 0) {
     throw new Error("Playwright reported runner/discovery errors; no trustworthy test judgment.");
   }

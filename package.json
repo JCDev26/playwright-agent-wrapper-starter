@@ -7,6 +7,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "agent:performance": "tsx src/playwright-wrapper/performance/cli.ts",
     "test": "node scripts/test.cjs",
     "test:headed": "node scripts/test.cjs --headed",
     "test:smoke": "node scripts/test.cjs --project=smoke",
@@ -23,6 +24,7 @@
     "test:ci": "node scripts/test.cjs --project=unit --project=integration --project=smoke --project=mobile-android --project=mobile-ios"
   },
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@playwright/test": "1.65.1",
     "@types/node": "^22.10.1",
     "tsx": "4.23.15",

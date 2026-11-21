@@ -1,4 +1,5 @@
 import { test, expect } from "../support/board";
+import { performanceContext } from "../support/performanceContext";
 
 test("measure task submission through the counter DOM update", async ({ page, browser }, info) => {
   await page.goto("/");
@@ -14,6 +15,7 @@ test("measure task submission through the counter DOM update", async ({ page, br
   const sorted = samplesMs.slice().sort((a, b) => a - b);
   const medianMs = (sorted[4] + sorted[5]) / 2;
   const observation = {
+    ...performanceContext(browser.browserType().name()),
     metric: "task-submit-to-dom", unit: "ms", samplesMs, medianMs,
     browser: browser.version(), platform: process.platform, project: info.project.name,
     conditions: "Loopback API, one warm-up, same page and context, no tracing.",

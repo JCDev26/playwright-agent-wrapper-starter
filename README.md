@@ -41,6 +41,8 @@ The [Playwright config](playwright.config.ts) uses opt-in projects for mobile an
 
 ## Use the same test with an AI assistant
 
+The [performance agent](docs/performance-agent.md) gives Codex or another client one governed tool over MCP or JSON stdio. The operator pins a reference report and candidate revision. The wrapper enforces the test scope and decides when a slower result needs confirmation.
+
 Start with the [planner, generator and failure-diagnosis exercise](docs/ai-workflow.md). It includes a seed, a human-readable plan and a reproducible product regression. The default suite runs without a model or credentials.
 
 ```sh

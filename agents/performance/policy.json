@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "action": "assess-performance",
+  "target": {
+    "project": "performance",
+    "spec": "tests/performance/task-timing.spec.ts",
+    "workers": 1,
+    "headed": false
+  },
+  "metric": "task-submit-to-dom",
+  "sampleCount": 10,
+  "relativeAllowance": 0.20,
+  "minimumAllowanceMs": 3
+}

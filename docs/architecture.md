@@ -38,7 +38,7 @@ CLI syntax and bootstrap failures deliberately remain outside the JSON wrapper-r
 
 Repository code, configuration, dependencies, the local account, and inherited environment are trusted. The request boundary is not OS/network isolation. Explicit worker values are bounded to 1–4; omitted values inherit Playwright defaults.
 
-There is no LLM, agent runtime, contributor registry, workflow engine, generic evaluator, approval gate, protocol adapter, or historical evidence service. Native reports and external human judgment remain the review surface.
+The general wrapper returns native judgments for trusted callers. The optional [performance agent](performance-agent.md) exposes one narrower tool over JSON stdio and MCP. Its wrapper-side policy binds the test target, validates the host's job and evidence pins, and limits confirmation. Model selection and tool permissions belong to the host. Native reports and external human judgment remain the review surface.
 
 ## V1 stop point
 
