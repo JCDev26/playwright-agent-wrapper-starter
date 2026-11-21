@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import policy from "../../../agents/performance/policy.json";
+import { jobIdPattern } from "../agents/governance";
 import { cleanRevision } from "./revision";
 import { readObservation } from "./evidence";
 import { eventCutoff, NoAcceptedMain, resolveAcceptedMain } from "./acceptedMain";
@@ -12,6 +13,9 @@ import { eventCutoff, NoAcceptedMain, resolveAcceptedMain } from "./acceptedMain
 async function prepare() {
   const candidate = cleanRevision();
   if (!candidate) throw new Error("Prepare from a clean, reviewed candidate checkout.");
+  const jobId = process.env.PW_AGENT_JOB_ID ?? randomUUID();
+  if (!jobIdPattern.test(jobId) || (process.env.PW_AGENT_REVISION && candidate !== process.env.PW_AGENT_REVISION))
+    throw new Error("The host job must authorize this candidate checkout.");
   const anchor = process.env.GITHUB_ACTIONS === "true"
     ? eventCutoff(process.env.GITHUB_EVENT_NAME ?? "", JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH!, "utf8")))
     : undefined;
@@ -41,7 +45,7 @@ async function prepare() {
     console.error(`Selected main ${reference.revision} (cutoff ${reference.anchor}, accepted by CI run ${reference.runId}).`);
     return { PW_AGENT_BASELINE_FILE: file, PW_AGENT_BASELINE_SHA256: observation.sha256,
       PW_AGENT_MAIN_REVISION: reference.revision, PW_AGENT_MAIN_CI_RUN: reference.runId,
-      PW_AGENT_REVISION: candidate, PW_AGENT_JOB_ID: randomUUID() };
+      PW_AGENT_REVISION: candidate, PW_AGENT_JOB_ID: jobId };
   } finally {
     if (added) execFileSync("git", ["worktree", "remove", checkout]);
     rmdirSync(temp);

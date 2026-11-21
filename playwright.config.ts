@@ -33,7 +33,11 @@ export default defineConfig({
     })),
     {
       name: "performance", default: false, testDir: "./tests/performance", workers: 1, retries: 0,
-      use: { browserName: "chromium", trace: "off" },
+      use: { browserName: "chromium", headless: true, trace: "off" },
+    },
+    {
+      name: "security", default: false, testDir: "./tests/security", workers: 1, retries: 0,
+      use: { browserName: "chromium", headless: true, trace: "retain-on-failure" },
     },
     {
       name: "unit",

@@ -27,31 +27,73 @@ jobs:
           node-version-file: ".nvmrc"
           cache: npm
       - run: npm ci
+      - name: Reserve a fresh evidence directory for this checkout
+        id: job
+        run: |
+          node --import tsx scripts/agent-job.ts init > "$RUNNER_TEMP/agent-job.json"
+          jq -r '.PW_AGENT_JOB_ID | "id=\(.)"' "$RUNNER_TEMP/agent-job.json" >> "$GITHUB_OUTPUT"
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run doctor
+        id: doctor
       - run: npm run typecheck
-      - run: npm run test:ci
+        id: types
+      - name: Test the desktop, mobile, unit and integration projects
+        id: suite
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/artifacts/reporting/${{ steps.job.outputs.id }}/suite.json
+        run: |
+          status=0
+          npm run test:ci || status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Bind the specialist endpoints to this job
+        if: ${{ !cancelled() && steps.job.outcome == 'success' }}
+        run: jq -r 'to_entries[] | "\(.key)=\(.value)"' "$RUNNER_TEMP/agent-job.json" >> "$GITHUB_ENV"
+      - name: Assess the task board's security contracts
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' && steps.types.outcome == 'success' }}
+        shell: bash
+        run: |
+          echo '{"name":"assess-security","arguments":{}}' | node --import tsx src/playwright-wrapper/security/cli.ts | tee "artifacts/reporting/$PW_AGENT_JOB_ID/security.json"
       - name: Measure the last accepted main on this runner
         id: baseline
-        if: github.event_name == 'push' || github.base_ref == 'main'
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' && steps.types.outcome == 'success' }}
         env:
           PW_MAIN_READ_TOKEN: ${{ github.token }}
         run: |
           status=0
           node --import tsx src/playwright-wrapper/performance/prepareMain.ts > "$RUNNER_TEMP/performance-binding.json" || status=$?
           if [[ "$status" == 3 && "$GITHUB_EVENT_NAME" == push ]]; then
-            node scripts/wrapper.cjs --project performance --spec tests/performance/task-timing.spec.ts --workers 1
+            env -u PW_MAIN_READ_TOKEN node scripts/wrapper.cjs --project performance --spec tests/performance/task-timing.spec.ts --workers 1
             echo "Initial baseline enrollment. No accepted predecessor exists." >> "$GITHUB_STEP_SUMMARY"
+            echo "enrolled=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [[ "$status" != 0 ]]; then exit "$status"; fi
           jq -r 'to_entries[] | "\(.key)=\(.value)"' "$RUNNER_TEMP/performance-binding.json" >> "$GITHUB_ENV"
           echo "ready=true" >> "$GITHUB_OUTPUT"
       - name: Compare the candidate with accepted main
-        if: steps.baseline.outputs.ready == 'true'
+        if: ${{ !cancelled() && steps.baseline.outputs.ready == 'true' }}
         shell: bash
         run: |
-          echo '{"name":"assess-performance","arguments":{}}' | node --import tsx src/playwright-wrapper/performance/cli.ts | tee artifacts/performance-finding.json
+          echo '{"name":"assess-performance","arguments":{}}' | node --import tsx src/playwright-wrapper/performance/cli.ts | tee "artifacts/reporting/$PW_AGENT_JOB_ID/performance.json"
+
+      - name: Seal the current job's evidence
+        id: seal
+        if: ${{ !cancelled() && steps.job.outcome == 'success' }}
+        env:
+          SUITE_EXIT: ${{ steps.suite.outputs.exit_code }}
+          ENROLLED: ${{ steps.baseline.outputs.enrolled }}
+        run: |
+          mode=required
+          if [[ "$ENROLLED" == true ]]; then mode=not-scheduled; fi
+          node --import tsx scripts/agent-job.ts seal "$mode" "${SUITE_EXIT:-missing}" > "$RUNNER_TEMP/report-binding.json"
+          jq -r '.PW_AGENT_REPORT_MANIFEST_SHA256 | "PW_AGENT_REPORT_MANIFEST_SHA256=\(.)"' "$RUNNER_TEMP/report-binding.json" >> "$GITHUB_ENV"
+      - name: Read the evidence and keep the aggregate verdict
+        if: ${{ !cancelled() && steps.seal.outcome == 'success' }}
+        shell: bash
+        run: |
+          echo '{"name":"summarize-evidence","arguments":{}}' | node --import tsx src/playwright-wrapper/reporting/cli.ts | tee "artifacts/reporting/$PW_AGENT_JOB_ID/summary.json"
 
       - name: Retain current validation evidence
         id: evidence
@@ -63,13 +105,17 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
-      - name: Summarize the performance finding
-        if: ${{ !cancelled() && steps.baseline.outputs.ready == 'true' }}
+      - name: Show the verification summary
+        if: ${{ !cancelled() && steps.job.outcome == 'success' }}
         env:
           EVIDENCE_URL: ${{ steps.evidence.outputs.artifact-url }}
         run: |
-          if [[ -s artifacts/performance-finding.json ]]; then
-            node --import tsx scripts/performance-summary.ts < artifacts/performance-finding.json >> "$GITHUB_STEP_SUMMARY"
+          directory="artifacts/reporting/$PW_AGENT_JOB_ID"
+          if [[ -s "$directory/summary.json" ]]; then
+            node --import tsx scripts/agent-summary.ts < "$directory/summary.json" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "No performance finding was produced. See the comparison step for diagnostics." >> "$GITHUB_STEP_SUMMARY"
+            echo "Verification summary unavailable. See the job steps and retained evidence." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ -n "$EVIDENCE_URL" ]]; then
+            echo "[Download this job's findings and native reports]($EVIDENCE_URL)." >> "$GITHUB_STEP_SUMMARY"
           fi

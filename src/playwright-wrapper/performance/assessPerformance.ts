@@ -1,6 +1,6 @@
-import { mkdirSync } from "node:fs";
 import path from "node:path";
 import policy from "../../../agents/performance/policy.json";
+import { authorizeAgentRequest, claimAgentJob } from "../agents/governance";
 import { runPlaywrightTarget } from "../execution/runPlaywrightTarget";
 import { differingFields, readObservation, type Observation } from "./evidence";
 import { cleanRevision } from "./revision";
@@ -25,25 +25,19 @@ export function assessPerformance(name: unknown, args: unknown, env = process.en
   const runs: RunEvidence[] = [];
   let baseline: (Pick<Observation, "revision" | "sha256" | "medianMs" | "initialTasks" | "harnessRevision"> & { acceptanceRun: string }) | undefined;
   let limitMs: number | undefined;
+  const grant = authorizeAgentRequest(tool.name, name, args, env, revision);
   type Status = "denied" | "insufficient_evidence" | "within_budget" | "regression_reproduced";
   const result = (status: Status, reason: string) => ({
-    policyVersion: policy.version, status, reason, baseline, limitMs, runs,
+    schemaVersion: 1, policyVersion: policy.version, jobId: grant.ok ? grant.jobId : null,
+    revision: grant.ok ? grant.revision : null, status, reason, baseline, limitMs, runs,
   });
-  if (name !== tool.name || args === null || typeof args !== "object" ||
-      Array.isArray(args) || Object.keys(args).length !== 0)
-    return result("denied", "Only the registered assessment with empty arguments is permitted.");
+  if (!grant.ok) return result("denied", grant.reason);
 
-  const job = env.PW_AGENT_JOB_ID;
+  const approvedRevision = grant.revision;
   const file = env.PW_AGENT_BASELINE_FILE;
   const pin = env.PW_AGENT_BASELINE_SHA256;
   const mainRevision = env.PW_AGENT_MAIN_REVISION;
   const acceptanceRun = env.PW_AGENT_MAIN_CI_RUN;
-  if (!job || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(job))
-    return result("denied", "A host-issued job UUID is required.");
-  const approvedRevision = env.PW_AGENT_REVISION;
-  if (!approvedRevision || !/^[0-9a-f]{40}$/.test(approvedRevision) || revision() !== approvedRevision)
-    return result("denied", "The clean checkout must match the candidate revision authorized by the host.");
-  if (env.PW_PERF_REFERENCE_ROOT) return result("denied", "Candidate execution cannot override the application checkout.");
   if (!file || !path.isAbsolute(file) || !pin || !/^[0-9a-f]{64}$/.test(pin) ||
       !mainRevision || !/^[0-9a-f]{40}$/.test(mainRevision) || !acceptanceRun || !/^[1-9][0-9]*$/.test(acceptanceRun))
     return result("insufficient_evidence", "Prepare a baseline from accepted main for this job.");
@@ -59,15 +53,8 @@ export function assessPerformance(name: unknown, args: unknown, env = process.en
     return result("insufficient_evidence", "The pinned baseline is unavailable, invalid, or lacks clean revision evidence.");
   }
 
-  // Atomic across simultaneous clients and server restarts in this workspace. Keep the claim after a crash.
-  const ledger = path.resolve("artifacts", "performance-agent-jobs");
-  try {
-    mkdirSync(ledger, { recursive: true });
-    mkdirSync(path.join(ledger, job));
-  } catch (error) {
-    return result("denied", (error as NodeJS.ErrnoException).code === "EEXIST"
-      ? "This host-issued job has already been consumed." : "The wrapper could not reserve the job.");
-  }
+  const claimError = claimAgentJob("performance", grant.jobId);
+  if (claimError) return result("denied", claimError);
   limitMs = reference.medianMs + Math.max(policy.minimumAllowanceMs, reference.medianMs * policy.relativeAllowance);
   for (let index = 0; index < 2; index++) {
     if (revision() !== approvedRevision) return result("denied", "The authorized checkout changed before execution.");

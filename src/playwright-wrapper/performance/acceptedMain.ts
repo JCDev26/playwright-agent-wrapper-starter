@@ -23,17 +23,30 @@ export async function selectAcceptedMain(
   throw new NoAcceptedMain("No successful main push CI was found in the eligible first-parent history.");
 }
 
+/** Freeze a stacked PR to the newest first-parent main commit reachable from its event base. */
+export function stackedMainCutoff(base: string, cwd = process.cwd()): string {
+  if (!shaPattern.test(base)) throw new Error("Invalid stacked pull request base.");
+  const git = (...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  const tip = git("rev-parse", "--verify", "refs/remotes/origin/" + branch + "^{commit}");
+  // The first-parent main history is a single chain. Commits outside the base form a contiguous prefix.
+  const ahead = git("rev-list", "--first-parent", "--count", tip, "--not", base);
+  if (!/^\d+$/.test(ahead)) throw new Error("Could not locate the main history shared with the PR base.");
+  return git("rev-parse", "--verify", tip + "~" + ahead + "^{commit}");
+}
+
 export function eventCutoff(name: string, event: {
   ref?: string; before?: string; repository?: { full_name: string };
   pull_request?: { base: { ref: string; sha: string; repo: { full_name: string } } };
-}) {
+}, stackedCutoff = stackedMainCutoff) {
   if (event.repository?.full_name.toLowerCase() !== repository.toLowerCase())
     throw new Error("Unexpected repository for accepted-main selection.");
   let sha;
-  if (name === "pull_request" && event.pull_request?.base.ref === branch &&
-      event.pull_request.base.repo.full_name.toLowerCase() === repository.toLowerCase()) sha = event.pull_request.base.sha;
+  const base = event.pull_request?.base;
+  if (name === "pull_request" && base?.ref && shaPattern.test(base.sha) &&
+      base.repo.full_name.toLowerCase() === repository.toLowerCase())
+    sha = base.ref === branch ? base.sha : stackedCutoff(base.sha);
   if (name === "push" && event.ref === "refs/heads/" + branch) sha = event.before;
-  if (!sha || !shaPattern.test(sha)) throw new Error("Expected a pull request to main or a main push.");
+  if (!sha || !shaPattern.test(sha)) throw new Error("Expected a repository pull request or a main push.");
   if (/^0+$/.test(sha)) throw new NoAcceptedMain("Initial main push has no predecessor.");
   return sha;
 }
