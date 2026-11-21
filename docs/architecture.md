@@ -40,6 +40,8 @@ Repository code, configuration, dependencies, the local account, and inherited e
 
 The host gives each specialist its own JSON stdio or MCP endpoint. All endpoints share the checked-in request and revision guard. Performance and Security reserve separate execution claims for each job. Reporting reads only the fixed files enrolled for that job. The host chooses the model, starts the approved endpoint and protects the checkout, job bindings and evidence from client writes. Maintainers own acceptance. [Performance](performance-agent.md) · [Security](security-agent.md) · [Reporting](reporting-agent.md)
 
+The Contrarian Agent reviews the reported claim in a separate pipeline job. It checks the producer's outcome, compares discovery identities with actual cases and replays the native security assertions and timing measurements. The CI scheduler uses its exit status to control downstream execution. [Contrarian review](contrarian-agent.md)
+
 ## V1 stop point
 
 The final hardening pass ends at truthful result classification, literal spec selection, structured exception handling, directly related regressions, and accurate documentation. Optional run-management features are not part of v1.

@@ -5,6 +5,7 @@ import reportingPolicy from "../agents/reporting/policy.json";
 import { jobDirectory } from "../src/playwright-wrapper/agents/governance";
 import { cleanRevision } from "../src/playwright-wrapper/performance/revision";
 import { EvidenceIssue, readEvidenceBytes, type Job } from "../src/playwright-wrapper/reporting/pinnedEvidence";
+import { captureReviewInputs } from "./capture-review-inputs";
 
 // Operator entry point. None of these operations are advertised through MCP or the agent CLIs.
 const checkout = realpathSync.native(process.cwd());
@@ -30,15 +31,19 @@ function main() {
     jobDirectory("reporting", jobId, true);
     return { PW_AGENT_JOB_ID: jobId, PW_AGENT_REVISION: revision };
   }
-  if (command !== "seal" || extra.length || !["required", "not-scheduled"].includes(mode) ||
-      !(suiteExit === "missing" || (/^(0|[1-9]\d{0,2})$/.test(suiteExit) && Number(suiteExit) <= 255)))
-    throw new Error("Use init, or seal <required|not-scheduled> <suite exit code|missing>.");
+  const review = command === "review-inputs" && (mode === "required" || mode === "initial-enrollment") &&
+    suiteExit === undefined && !extra.length;
+  const seal = command === "seal" && ["required", "not-scheduled"].includes(mode) && !extra.length &&
+    (suiteExit === "missing" || (/^(0|[1-9]\d{0,2})$/.test(suiteExit) && Number(suiteExit) <= 255));
+  if (!review && !seal)
+    throw new Error("Use init, seal <required|not-scheduled> <suite exit code|missing>, or review-inputs <required|initial-enrollment>.");
 
   const jobId = process.env.PW_AGENT_JOB_ID ?? "";
   const directory = jobDirectory("reporting", jobId);
   if (process.env.PW_AGENT_REVISION !== revision)
     throw new Error("The reserved job directory and approved candidate are required.");
   const job = { jobId, revision };
+  if (review) return captureReviewInputs(job, mode, process.env);
   const suite = enroll(job, "suite");
   const security = enroll(job, "security");
   const performance = mode === "required" ? enroll(job, "performance") : null;

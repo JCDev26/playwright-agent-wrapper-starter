@@ -4,7 +4,7 @@ The Reporting Agent answers what the approved checkout's tests established in on
 
 ## Read a CI result
 
-Open the **Playwright verification** job summary. In the downloaded artifact, open `reporting/<job-id>/summary.json` alongside the sealed manifest and enrolled inputs. Start with `knownFailures` and `incompleteSources`. A confirmed failure takes precedence over a missing input, so both lists can contain entries in the same job. The CI workflow owns collection, retention and presentation. [GitHub Actions workflow](../.github/workflows/ci.yml)
+Open **Playwright verification** in the **collect** job summary. In the downloaded artifact, open `reporting/<job-id>/summary.json` alongside the sealed manifest and enrolled inputs. Start with `knownFailures` and `incompleteSources`. A confirmed failure takes precedence over a missing input, so both lists can contain entries in the same job. The final **verify** job uses the summary as the claim under review. [GitHub Actions workflow](../.github/workflows/ci.yml) · [Contrarian Agent](contrarian-agent.md)
 
 | Overall status | What it establishes | CLI exit |
 |---|---|---|

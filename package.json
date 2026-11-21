@@ -11,6 +11,7 @@
     "agent:performance": "tsx src/playwright-wrapper/performance/cli.ts",
     "agent:security": "tsx src/playwright-wrapper/security/cli.ts",
     "agent:reporting": "tsx src/playwright-wrapper/reporting/cli.ts",
+    "agent:contrarian": "tsx src/playwright-wrapper/contrarian/cli.ts",
     "test": "node scripts/test.cjs",
     "test:headed": "node scripts/test.cjs --headed",
     "test:smoke": "node scripts/test.cjs --project=smoke",

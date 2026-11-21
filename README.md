@@ -49,8 +49,9 @@ Each specialist exposes one tool over MCP or JSON stdio. The host grants the cli
 | Performance · `assess-performance` | Did task-submission latency regress against the last CI-accepted main? Both apps start with 50 tasks on the same runner. Adding tests leaves the per-submission budget intact. | [Measure a candidate](docs/performance-agent.md) |
 | Security · `assess-security` | Which of the three local task-board protections passed, failed or lacked evidence? | [Run the defensive checks](docs/security-agent.md) |
 | Reporting · `summarize-evidence` | What passed or failed in this job, and which expected evidence is missing or inconclusive? A client can reread the same sealed evidence. | [Interpret a job](docs/reporting-agent.md) |
+| Contrarian · `review-verdict` | Does the pipeline's verdict hold up against independent discovery, native outcomes and the accepted-main measurements? Only `approved` permits advancement. | [Gate a pipeline](docs/contrarian-agent.md) |
 
-On pull requests and pushes to main, GitHub Actions runs the suite, captures both specialist findings and seals their evidence for Reporting. Open the **verify** job summary for the verdict and download the matching native reports from the linked artifact. A proven failure stays visible when a different check lacks evidence. Maintainers decide whether to accept a change. [CI workflow](.github/workflows/ci.yml)
+On pull requests and pushes to main, the **collect** job runs the suite, Security and Performance and publishes Reporting's summary. The final **verify** job challenges the evidence on a fresh runner, including after a collection failure. Its summary explains whether downstream jobs may proceed. A confirmed failure stays visible when another lane lacks evidence. Maintainers decide whether to merge. [CI workflow](.github/workflows/ci.yml)
 
 Start with the [planner, generator and failure-diagnosis exercise](docs/ai-workflow.md). It includes a seed, a human-readable plan and a reproducible product regression. The default suite runs without a model or credentials.
 

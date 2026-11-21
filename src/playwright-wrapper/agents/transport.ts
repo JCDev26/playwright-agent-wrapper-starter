@@ -5,7 +5,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
 
 interface AgentEndpoint {
-  role: "performance" | "security" | "reporting";
+  role: "performance" | "security" | "reporting" | "contrarian";
   tool: Tool;
   execute(name: unknown, args: unknown): { status: string };
   passingStatus: string;
