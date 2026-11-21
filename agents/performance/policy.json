@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "reference": {
+    "repository": "JCDev26/playwright-agent-wrapper-starter",
+    "branch": "main",
+    "workflow": "ci.yml"
+  },
+  "action": "assess-performance",
+  "target": {
+    "project": "performance",
+    "spec": "tests/performance/task-timing.spec.ts",
+    "grep": "@task-submit-benchmark",
+    "workers": 1,
+    "headed": false
+  },
+  "metric": "task-submit-to-dom",
+  "sampleCount": 10,
+  "initialTasks": 50,
+  "relativeAllowance": 0.20,
+  "minimumAllowanceMs": 3
+}

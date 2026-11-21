@@ -1,6 +1,6 @@
 import path from "node:path";
 
-const ALLOWED_PROJECTS = ["smoke", "mobile-android", "mobile-ios", "performance"] as const;
+const ALLOWED_PROJECTS = ["smoke", "mobile-android", "mobile-ios", "performance", "security"] as const;
 export type PlaywrightProjectName = (typeof ALLOWED_PROJECTS)[number];
 
 export interface PlaywrightTargetRequest {

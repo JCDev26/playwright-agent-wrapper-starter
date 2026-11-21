@@ -11,12 +11,193 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  verify:
+  collect:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      job_id: ${{ steps.job.outputs.id }}
+      platform: ${{ steps.job.outputs.platform }}
+      plan_pin: ${{ steps.plan.outputs.pin }}
+      manifest_pin: ${{ steps.seal.outputs.pin }}
+      review_bindings: ${{ steps.capture.outputs.binding }}
+      review_artifact: ${{ steps.bundle.outputs.artifact-id }}
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: npm
+      - run: npm ci
+      - name: Reserve a fresh evidence directory for this checkout
+        id: job
+        run: |
+          node --import tsx scripts/agent-job.ts init > "$RUNNER_TEMP/agent-job.json"
+          jq -r '.PW_AGENT_JOB_ID | "id=\(.)"' "$RUNNER_TEMP/agent-job.json" >> "$GITHUB_OUTPUT"
+          node -p '"platform=" + process.platform' >> "$GITHUB_OUTPUT"
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run doctor
+        id: doctor
+      - run: npm run typecheck
+        id: types
+      - name: Discover the intended test cases on this revision
+        id: plan
+        env:
+          PW_AGENT_JOB_ID: ${{ steps.job.outputs.id }}
+          PW_AGENT_REVISION: ${{ github.sha }}
+        run: |
+          node --import tsx scripts/review-plan.ts > "$RUNNER_TEMP/playwright-plan.json"
+          jq -r '.PW_AGENT_REVIEW_PLAN_SHA256 | "pin=\(.)"' "$RUNNER_TEMP/playwright-plan.json" >> "$GITHUB_OUTPUT"
+      - name: Test the desktop, mobile, unit and integration projects
+        id: suite
+        if: ${{ !cancelled() && steps.types.outcome == 'success' }}
+        env:
+          PW_EVIDENCE_JOB_ID: ${{ steps.job.outputs.id }}
+          PW_EVIDENCE_REVISION: ${{ github.sha }}
+          PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/artifacts/reporting/${{ steps.job.outputs.id }}/suite.json
+        run: |
+          status=0
+          npm run test:ci || status=$?
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Bind the specialist endpoints to this job
+        if: ${{ !cancelled() && steps.job.outcome == 'success' }}
+        run: jq -r 'to_entries[] | "\(.key)=\(.value)"' "$RUNNER_TEMP/agent-job.json" >> "$GITHUB_ENV"
+      - name: Assess the task board's security contracts
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' && steps.types.outcome == 'success' }}
+        shell: bash
+        run: |
+          echo '{"name":"assess-security","arguments":{}}' | node --import tsx src/playwright-wrapper/security/cli.ts | tee "artifacts/reporting/$PW_AGENT_JOB_ID/security.json"
+      - name: Measure the last accepted main on this runner
+        id: baseline
+        if: ${{ !cancelled() && steps.doctor.outcome == 'success' && steps.types.outcome == 'success' }}
+        env:
+          PW_MAIN_READ_TOKEN: ${{ github.token }}
+        run: |
+          status=0
+          node --import tsx src/playwright-wrapper/performance/prepareMain.ts > "$RUNNER_TEMP/performance-binding.json" || status=$?
+          if [[ "$status" == 3 && "$GITHUB_EVENT_NAME" == push ]]; then
+            env -u PW_MAIN_READ_TOKEN node scripts/wrapper.cjs --project performance --spec tests/performance/task-timing.spec.ts --grep @task-submit-benchmark --workers 1 > "artifacts/reporting/$PW_AGENT_JOB_ID/enrollment-receipt.json"
+            echo "Initial baseline enrollment. No accepted predecessor exists." >> "$GITHUB_STEP_SUMMARY"
+            echo "enrolled=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$status" != 0 ]]; then exit "$status"; fi
+          jq -r 'to_entries[] | "\(.key)=\(.value)"' "$RUNNER_TEMP/performance-binding.json" >> "$GITHUB_ENV"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+      - name: Compare the candidate with accepted main
+        if: ${{ !cancelled() && steps.baseline.outputs.ready == 'true' }}
+        shell: bash
+        run: |
+          echo '{"name":"assess-performance","arguments":{}}' | node --import tsx src/playwright-wrapper/performance/cli.ts | tee "artifacts/reporting/$PW_AGENT_JOB_ID/performance.json"
+
+      - name: Seal the current job's evidence
+        id: seal
+        if: ${{ !cancelled() && steps.job.outcome == 'success' }}
+        env:
+          SUITE_EXIT: ${{ steps.suite.outputs.exit_code }}
+          ENROLLED: ${{ steps.baseline.outputs.enrolled }}
+        run: |
+          mode=required
+          if [[ "$ENROLLED" == true ]]; then mode=not-scheduled; fi
+          node --import tsx scripts/agent-job.ts seal "$mode" "${SUITE_EXIT:-missing}" > "$RUNNER_TEMP/report-binding.json"
+          jq -r '.PW_AGENT_REPORT_MANIFEST_SHA256 | "PW_AGENT_REPORT_MANIFEST_SHA256=\(.)"' "$RUNNER_TEMP/report-binding.json" >> "$GITHUB_ENV"
+          jq -r '.PW_AGENT_REPORT_MANIFEST_SHA256 | "pin=\(.)"' "$RUNNER_TEMP/report-binding.json" >> "$GITHUB_OUTPUT"
+      - name: Read the evidence and keep the aggregate verdict
+        if: ${{ !cancelled() && steps.seal.outcome == 'success' }}
+        shell: bash
+        run: |
+          echo '{"name":"summarize-evidence","arguments":{}}' | node --import tsx src/playwright-wrapper/reporting/cli.ts | tee "artifacts/reporting/$PW_AGENT_JOB_ID/summary.json"
+
+      - name: Capture native evidence for independent review
+        id: capture
+        if: ${{ !cancelled() && steps.seal.outcome == 'success' }}
+        env:
+          ENROLLED: ${{ steps.baseline.outputs.enrolled }}
+        run: |
+          mode=required
+          if [[ "$GITHUB_EVENT_NAME" == push && "$ENROLLED" == true ]]; then mode=initial-enrollment; fi
+          node --import tsx scripts/agent-job.ts review-inputs "$mode" > "$RUNNER_TEMP/review-inputs.json"
+          jq -r '"binding=" + tojson' "$RUNNER_TEMP/review-inputs.json" >> "$GITHUB_OUTPUT"
+      - name: Transfer the job's fixed review inputs
+        id: bundle
+        if: ${{ !cancelled() && steps.job.outcome == 'success' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: review-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/reporting/${{ steps.job.outputs.id }}/manifest.json
+            artifacts/reporting/${{ steps.job.outputs.id }}/summary.json
+            artifacts/reporting/${{ steps.job.outputs.id }}/suite-plan.json
+            artifacts/reporting/${{ steps.job.outputs.id }}/suite.json
+            artifacts/reporting/${{ steps.job.outputs.id }}/security.json
+            artifacts/reporting/${{ steps.job.outputs.id }}/security-native.json
+            artifacts/reporting/${{ steps.job.outputs.id }}/performance.json
+            artifacts/reporting/${{ steps.job.outputs.id }}/baseline-native.json
+            artifacts/reporting/${{ steps.job.outputs.id }}/candidate-1-native.json
+            artifacts/reporting/${{ steps.job.outputs.id }}/candidate-2-native.json
+            artifacts/reporting/${{ steps.job.outputs.id }}/enrollment-native.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Retain current validation evidence
+        id: evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-${{ github.sha }}-${{ github.run_attempt }}
+          path: artifacts/
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Show the verification summary
+        if: ${{ !cancelled() && steps.job.outcome == 'success' }}
+        env:
+          EVIDENCE_URL: ${{ steps.evidence.outputs.artifact-url }}
+        run: |
+          directory="artifacts/reporting/$PW_AGENT_JOB_ID"
+          if [[ -s "$directory/summary.json" ]]; then
+            node --import tsx scripts/agent-summary.ts < "$directory/summary.json" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Verification summary unavailable. See the job steps and retained evidence." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [[ -n "$EVIDENCE_URL" ]]; then
+            echo "[Download this job's findings and native reports]($EVIDENCE_URL)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Keep the stable status-check name. Downstream jobs depend on verify.
+  verify:
+    needs: collect
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      advance: ${{ steps.review.outputs.advance == 'true' && steps.receipt.outcome == 'success' && steps.explain.outcome == 'success' }}
+    env:
+      PW_AGENT_UPSTREAM_RESULT: ${{ needs.collect.result }}
+      PW_AGENT_JOB_ID: ${{ needs.collect.outputs.job_id }}
+      PW_AGENT_REVISION: ${{ github.sha }}
+      PW_AGENT_PRODUCER_PLATFORM: ${{ needs.collect.outputs.platform }}
+      PW_AGENT_REPORT_MANIFEST_SHA256: ${{ needs.collect.outputs.manifest_pin }}
+      PW_AGENT_REVIEW_PLAN_SHA256: ${{ needs.collect.outputs.plan_pin }}
+    steps:
+      - name: Check that collection completed and issued a job
+        env:
+          BUNDLE_ID: ${{ needs.collect.outputs.review_artifact }}
+        run: |
+          if [[ "$PW_AGENT_UPSTREAM_RESULT" != success && "$PW_AGENT_UPSTREAM_RESULT" != failure ]]; then
+            echo "Collection was $PW_AGENT_UPSTREAM_RESULT. Advancement requires a completed review." >> "$GITHUB_STEP_SUMMARY"
+            exit 2
+          fi
+          if [[ ! "$PW_AGENT_JOB_ID" =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ || ! "$BUNDLE_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "The producer did not supply a job and review artifact. Advancement is blocked." >> "$GITHUB_STEP_SUMMARY"
+            exit 2
+          fi
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -24,19 +205,43 @@ jobs:
         with:
           node-version-file: ".nvmrc"
           cache: npm
-      - run: npm ci
-      - run: npx playwright install --with-deps chromium webkit
-      - run: npm run doctor
-      - run: npm run typecheck
-      - run: npm run test:ci
-      - name: Record isolated browser timings
-        run: node scripts/wrapper.cjs --project performance --workers 1
-
-      - name: Retain current validation evidence
-        if: ${{ !cancelled() }}
+      - run: npm ci --ignore-scripts
+      - name: Download this producer's immutable review artifact
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          artifact-ids: ${{ needs.collect.outputs.review_artifact }}
+          path: artifacts/reporting/${{ needs.collect.outputs.job_id }}
+      - name: Challenge the pipeline verdict
+        id: review
+        env:
+          REVIEW_BINDINGS: ${{ needs.collect.outputs.review_bindings }}
+        run: |
+          # Only allow the host's named review pins and accepted-main identifiers into the endpoint.
+          jq -nr --arg binding "$REVIEW_BINDINGS" '($binding | if length == 0 then {} else fromjson end)
+            | to_entries[] | select(.key | test("^PW_AGENT_(REVIEW_(PERFORMANCE|(SUMMARY|SECURITY|BASELINE|CANDIDATE_[12]|ENROLLMENT)_SHA256)|MAIN_(REVISION|CI_RUN)|BASELINE_SHA256)$"))
+            | select(.value | type == "string" and test("^[a-z0-9-]+$")) | "\(.key)=\(.value)"' > "$RUNNER_TEMP/contrarian.env"
+          status=0
+          echo '{"name":"review-verdict","arguments":{}}' | node --env-file="$RUNNER_TEMP/contrarian.env" --import tsx src/playwright-wrapper/contrarian/cli.ts > "$RUNNER_TEMP/contrarian.json" || status=$?
+          cat "$RUNNER_TEMP/contrarian.json"
+          if [[ "$status" == 0 ]] && jq -e --arg job "$PW_AGENT_JOB_ID" --arg revision "$PW_AGENT_REVISION" \
+            '.status == "approved" and .advance == true and .jobId == $job and .revision == $revision' "$RUNNER_TEMP/contrarian.json" > /dev/null; then
+            echo "advance=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "advance=false" >> "$GITHUB_OUTPUT"
+            if [[ "$status" == 0 ]]; then status=2; fi
+          fi
+          exit "$status"
+      - name: Retain the contrarian verdict
+        id: receipt
+        if: ${{ !cancelled() && steps.review.outcome != 'skipped' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: playwright-${{ github.sha }}
-          path: artifacts/
+          name: contrarian-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/contrarian.json
           retention-days: 7
-          if-no-files-found: warn
+          if-no-files-found: error
+      - name: Explain the final gate
+        id: explain
+        if: ${{ !cancelled() && steps.review.outcome != 'skipped' }}
+        run: |
+          node --import tsx scripts/contrarian-summary.ts < "$RUNNER_TEMP/contrarian.json" >> "$GITHUB_STEP_SUMMARY"

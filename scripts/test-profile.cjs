@@ -8,7 +8,7 @@ module.exports = function testProfile(args) {
     while (index + 1 < args.length && !args[index + 1].startsWith('-')) projects.push(args[++index]);
   }
   if (!projects.length) return 'smoke';
-  const names = ['unit', 'integration', 'smoke', 'performance', 'mobile-ios', 'mobile-android'];
+  const names = ['unit', 'integration', 'smoke', 'performance', 'security', 'mobile-ios', 'mobile-android'];
   const matches = names.filter(name => projects.some(selector =>
     /^[a-z*-]+$/i.test(selector) &&
     new RegExp('^' + selector.split('*').join('.*') + '$', 'i').test(name)));

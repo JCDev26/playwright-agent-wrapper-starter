@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "action": "summarize-evidence",
+  "suiteProjects": ["unit", "integration", "smoke", "mobile-android", "mobile-ios"],
+  "maxManifestBytes": 8192,
+  "maxSuiteBytes": 33554432,
+  "maxFindingBytes": 65536
+}

@@ -14,7 +14,7 @@ interface PlaywrightTargetRequest {
 }
 ```
 
-- `project`: one of `smoke`, `mobile-android`, `mobile-ios`, or `performance`.
+- The allowed values for `project` are `smoke`, `mobile-android`, `mobile-ios`, `performance` and `security`.
 - `spec`: optional non-empty repository-relative `.spec.ts` path under `tests/`. Backslashes normalize to slashes. Absolute paths in Windows/POSIX form, parent-directory segments, and NUL are rejected. Execution uses an escaped, anchored literal-file filter; existence and project membership are resolved by Playwright. A missing/nonmatching file is an execution error, not necessarily a validation error.
 - `grep`: optional Playwright regex string, trimmed, non-empty, at most 200 characters, without NUL. Regex syntax is interpreted by Playwright; invalid syntax can produce an execution error. It remains one argv value.
 - `headed`: optional boolean; defaults to false.

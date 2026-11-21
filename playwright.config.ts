@@ -1,6 +1,11 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Ordinary suite runs can carry evidence identity without receiving an agent capability.
+const jobId = process.env.PW_AGENT_JOB_ID ?? process.env.PW_EVIDENCE_JOB_ID;
+const revision = process.env.PW_AGENT_REVISION ?? process.env.PW_EVIDENCE_REVISION;
+
 export default defineConfig({
+  metadata: jobId && revision ? { agentJobId: jobId, agentRevision: revision } : {},
   timeout: 30_000,
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
@@ -33,7 +38,11 @@ export default defineConfig({
     })),
     {
       name: "performance", default: false, testDir: "./tests/performance", workers: 1, retries: 0,
-      use: { browserName: "chromium", trace: "off" },
+      use: { browserName: "chromium", headless: true, trace: "off" },
+    },
+    {
+      name: "security", default: false, testDir: "./tests/security", workers: 1, retries: 0,
+      use: { browserName: "chromium", headless: true, trace: "retain-on-failure" },
     },
     {
       name: "unit",

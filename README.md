@@ -27,9 +27,10 @@ When adopting this in your codebase, point the fixture at your application and s
 | `npm test` | Default projects covering the desktop journey, wrapper unit tests and CLI integration. |
 | `npm run test:mobile` | Pixel 10 on Chromium and iPhone 17 on WebKit. Both repeat the desktop journey and exercise a long task name on a touch screen. Install the engines with `npx playwright install chromium webkit`. |
 | `npm run test:performance` | One warm-up and ten measured submissions in Chromium, with the raw durations and median attached to the HTML report. |
+| `npm run test:security` | Three defensive contracts on a fresh local task board. Inspect literal rendering, update validation and cache behavior in the native report. |
 | `npm run test:load` | Starts a private task API and runs k6 at five create/list/delete journeys per second for 15 seconds. Requires the [k6 executable](https://grafana.com/docs/k6/latest/set-up/install-k6/) on PATH. |
 
-The [Playwright config](playwright.config.ts) uses opt-in projects for mobile and performance. CI explicitly selects the mobile projects and records performance in its own invocation. Try `npx playwright test --project=smoke --shuffle` to check test isolation. Repeat with the printed seed to investigate an order-dependent failure.
+The [Playwright config](playwright.config.ts) uses opt-in projects for mobile, performance and security. CI selects the mobile projects in the regular suite and runs each executing specialist separately. Try `npx playwright test --project=smoke --shuffle` to check test isolation. Repeat with the printed seed to investigate an order-dependent failure.
 
 ## Interpret the measurements
 
@@ -40,6 +41,17 @@ The [Playwright config](playwright.config.ts) uses opt-in projects for mobile an
 **API load** checks successful operations, p95 HTTP latency, error rate and dropped iterations. The [k6 scenario](examples/load/tasks.js) includes example thresholds for this loopback demo. Select rates and budgets from your service objectives when adapting it.
 
 ## Use the same test with an AI assistant
+
+Each specialist exposes one tool over MCP or JSON stdio. The host grants the client a role and binds it to a clean Git revision and a job. Codex and other clients use the same checked-in policy and receive the same structured findings.
+
+| Specialist | What its tool answers | Operator guide |
+|---|---|---|
+| Performance · `assess-performance` | Did task-submission latency regress against the last CI-accepted main? Both apps start with 50 tasks on the same runner. Adding tests leaves the per-submission budget intact. | [Measure a candidate](docs/performance-agent.md) |
+| Security · `assess-security` | Which of the three local task-board protections passed, failed or lacked evidence? | [Run the defensive checks](docs/security-agent.md) |
+| Reporting · `summarize-evidence` | What passed or failed in this job, and which expected evidence is missing or inconclusive? A client can reread the same sealed evidence. | [Interpret a job](docs/reporting-agent.md) |
+| Contrarian · `review-verdict` | Does the pipeline's verdict hold up against independent discovery, native outcomes and the accepted-main measurements? Only `approved` permits advancement. | [Gate a pipeline](docs/contrarian-agent.md) |
+
+On pull requests and pushes to main, the **collect** job runs the suite, Security and Performance and publishes Reporting's summary. The final **verify** job challenges the evidence on a fresh runner, including after a collection failure. Its summary explains whether downstream jobs may proceed. A confirmed failure stays visible when another lane lacks evidence. Maintainers decide whether to merge. [CI workflow](.github/workflows/ci.yml)
 
 Start with the [planner, generator and failure-diagnosis exercise](docs/ai-workflow.md). It includes a seed, a human-readable plan and a reproducible product regression. The default suite runs without a model or credentials.
 

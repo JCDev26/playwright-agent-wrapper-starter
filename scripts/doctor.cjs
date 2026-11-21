@@ -18,7 +18,7 @@ function runDoctor({ cwd = process.cwd(), profile = 'smoke', headed = false } = 
     limits: 'Local prerequisite observations only. No tests or app/config validation performed; no network, install, repair, or approval. Readiness can change after this check.' });
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
   if (!check('profile', 'configuration', `Selected ${profile} prerequisites.`, () => {
-    assert(['unit', 'smoke', 'mobile-android', 'mobile-ios', 'performance', 'all-browsers'].includes(profile), 'Unknown prerequisite profile.');
+    assert(['unit', 'smoke', 'mobile-android', 'mobile-ios', 'performance', 'security', 'all-browsers'].includes(profile), 'Unknown prerequisite profile.');
   })) return finish();
   if (!check('node', 'environment', `Node ${deps.nodeVersion ?? process.versions.node}.`, () => {
     const [major, minor] = (deps.nodeVersion ?? process.versions.node).split('.').map(Number);

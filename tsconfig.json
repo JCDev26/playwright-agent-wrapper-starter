@@ -5,6 +5,7 @@
     "moduleResolution": "NodeNext",
     "lib": ["ES2022", "DOM"],
     "strict": true,
+    "resolveJsonModule": true,
     "noEmit": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,6 +15,7 @@
     "playwright.config.ts",
     "tests/**/*.ts",
     "examples/**/*.ts",
+    "scripts/**/*.ts",
     "src/**/*.ts"
   ]
 }

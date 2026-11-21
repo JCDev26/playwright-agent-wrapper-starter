@@ -38,7 +38,9 @@ CLI syntax and bootstrap failures deliberately remain outside the JSON wrapper-r
 
 Repository code, configuration, dependencies, the local account, and inherited environment are trusted. The request boundary is not OS/network isolation. Explicit worker values are bounded to 1–4; omitted values inherit Playwright defaults.
 
-There is no LLM, agent runtime, contributor registry, workflow engine, generic evaluator, approval gate, protocol adapter, or historical evidence service. Native reports and external human judgment remain the review surface.
+The host gives each specialist its own JSON stdio or MCP endpoint. All endpoints share the checked-in request and revision guard. Performance and Security reserve separate execution claims for each job. Reporting reads only the fixed files enrolled for that job. The host chooses the model, starts the approved endpoint and protects the checkout, job bindings and evidence from client writes. Maintainers own acceptance. [Performance](performance-agent.md) · [Security](security-agent.md) · [Reporting](reporting-agent.md)
+
+The Contrarian Agent reviews the reported claim in a separate pipeline job. It checks the producer's outcome, compares discovery identities with actual cases and replays the native security assertions and timing measurements. The CI scheduler uses its exit status to control downstream execution. [Contrarian review](contrarian-agent.md)
 
 ## V1 stop point
 

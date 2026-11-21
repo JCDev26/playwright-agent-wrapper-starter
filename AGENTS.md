@@ -4,6 +4,9 @@ This is a bounded Playwright Test wrapper, not a production agent platform.
 Read README.md first; load task-specific contracts and tests only as needed.
 Input contract: src/playwright-wrapper/contract; execution and judgment: src/playwright-wrapper/execution; artifacts: src/playwright-wrapper/artifacts.
 Portable observation contract: docs/run-evidence-v1.md; implementation: src/reporting/run-report.ts.
+Each governed specialist has its own role instructions and versioned policy under
+`agents/performance/`, `agents/security/`, `agents/reporting/` or `agents/contrarian/`. Use the corresponding
+operator guide under `docs/` and expose only the endpoint granted by the host.
 
 Use the locked dependencies: npm ci. Validate npm run typecheck and npm test; git diff --check.
 Do not claim a test passed merely because a wrapper returned ok or a process exited zero.
