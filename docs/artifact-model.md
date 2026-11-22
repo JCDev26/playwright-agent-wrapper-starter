@@ -1,44 +1,30 @@
 # Artifact model
 
-The wrapper returns references to native Playwright reports. It does not replace their contents or implement a generic evidence store.
+The wrapper references native Playwright reports without replacing their contents.
 
-## Result shape
+Each invocation reserves artifacts/wrapper-result-<runId>-<suffix>/ with sibling destinations:
 
-```ts
-interface PlaywrightArtifacts {
-  htmlReport: string | null;
-  testResultsJson: string | null;
-  testResultsXml: string | null;
-  traceFiles: string[];
-}
-```
+- results.json: native JSON, the sole test-judgment input.
+- junit.xml: native JUnit.
+- html/index.html: native HTML, with its own report assets.
+- test-results/: native attachments, screenshots, videos and traces.
 
-Paths are relative to the repository working directory. Missing scalar paths are null; traces are always an array.
+Paths are relative to the repository working directory. Missing scalar paths are null; traceFiles is always an array. Screenshots/videos remain in native reports rather than duplicated wrapper fields.
 
-## Current invocation versus filesystem presence
+Directory reservation uses an absolute filesystem prefix, including Windows' extended path form, while returning relative references. This avoids mkdtemp rejecting long checkout paths before Playwright can launch; it does not remove path restrictions in test code or other tools.
 
-**`testResultsJson` in a wrapper result** references the fresh `artifacts/wrapper-result-<suffix>/results.json` reserved for this invocation, when present. The wrapper sets `PLAYWRIGHT_JSON_OUTPUT_FILE` in the child environment, overriding an inherited JSON output destination. It reads only this invocation's file to establish test meaning. A previous report cannot supply the classification.
+The child receives controlled JSON/JUnit/HTML output environment variables and a native --output argument. These override inherited output destinations only in that child; global environment and cwd are not changed. The HTML folder is a sibling of test-results, so report generation cannot delete test assets. Direct npm test retains its configured shared report locations.
 
-A present current-run JSON file can still contain runner errors or unusable data. Its presence is not itself proof of passed/failed tests. On pre-execution validation rejection, the field is null.
+All advertised wrapper references come from the reserved root. A present file is current-invocation attribution, not proof of valid/complete content, authentication or test success. Only native JSON with completed attempts, consistent outcomes and compatible child completion can establish a judgment. Incomplete reporting, a stuck reporter, or timeout/cancellation cannot be accepted merely because JSON was written early.
 
-**`htmlReport`, `testResultsXml`, and `traceFiles`** are presence-based references at shared locations:
+Ancillary discovery is best-effort and scoped to that root; a scanner exception degrades references without replacing the primary result. An unresponsive scan remains subject to the invocation deadline. Interrupted runs may return null/empty paths while retaining execution.artifactRoot for inspection of partial files. Native JSON must be readable and at most 16 MiB for wrapper judgment.
 
-- `artifacts/playwright-report/index.html`
-- `artifacts/test-results.xml`
-- `.zip` files beneath `artifacts/test-results/`
+Validation rejection never advertises earlier artifacts. A later run never deletes, scans or reuses another invocation's root. Same-cwd concurrent wrapper calls are tested, including cancellation isolation. This does not make arbitrary test side effects outside the run root concurrent-safe.
 
-They may come from an earlier invocation, be overwritten by another run, or be absent. The wrapper does not establish their current-run provenance. Trace discovery identifies ZIP paths, not authenticated trace contents. Screenshots/videos have no dedicated wrapper fields.
+Use execution.runId, target, timestamps, source qualification and environment to establish the context being reviewed. Source/working-tree observation is contextual and unverified as a deployment identity. Historical reports remain unchanged; a prior successful report is not evidence for a different revision, invocation or environment.
 
-Direct `npm test` runs still use the configured shared `artifacts/test-results.json`. Wrapper invocations use their fresh JSON location instead and never consume the shared JSON for classification.
+Generated roots remain under the ignored artifacts tree for review. There is no history index, retention service or tamper protection. To open the selected native HTML report:
 
-## Failure behavior
+    node node_modules/playwright/cli.js show-report artifacts/wrapper-result-<runId>-<suffix>/html
 
-Ancillary discovery is best-effort. If scanning HTML/JUnit/trace locations throws, those references degrade to null/empty without changing the primary validation, process, or test result. Current-run JSON reading is different: it is necessary for classification, so missing or unusable data produces `execution_error`.
-
-## Review and limits
-
-Start with the wrapper status/error and its current-run JSON, then inspect other reports after confirming they belong to the run of interest.
-
-Fresh JSON directories exist solely to isolate classification evidence and retain the native report for review. They are generated artifacts under the existing ignored `artifacts/` tree; there is no run identity API, history index, retention service, authentication, or tamper protection. Trusted repository code and the local environment remain assumptions. Generated artifacts can be removed when no longer needed.
-
-Shared HTML/JUnit/traces are not safe for concurrent-run attribution. This wrapper does not promise general concurrent artifact isolation.
+The existing show-report npm script continues to open the plain npm test report. See [lifecycle and API migration](execution-lifecycle.md) and [result schema](result-schema.md).

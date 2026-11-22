@@ -1,9 +1,10 @@
+import path from "node:path";
+import type { PlaywrightProcessRunner, ProcessOutcome } from "../../src/playwright-wrapper/execution/processLifecycle";
 import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import { playwrightReport } from "../support/playwrightReport";
 import {
   runPlaywrightTarget,
-  type PlaywrightSpawnSync,
 } from "../../src/playwright-wrapper/execution/runPlaywrightTarget";
 import type { PlaywrightArtifacts } from "../../src/playwright-wrapper/contract/resultSchema";
 
@@ -22,28 +23,28 @@ function createSpawnTracker(result: { status: number | null; error?: Error }) {
     shell: false;
   }> = [];
 
-  const spawnSync: PlaywrightSpawnSync = (command, args, options) => {
+  const runProcess: PlaywrightProcessRunner = async (command, args, options) => {
     calls.push({ command, args: [...args], stdio: options.stdio, shell: options.shell });
     if (result.status === 0 || result.status === 1) {
       fs.writeFileSync(options.env.PLAYWRIGHT_JSON_OUTPUT_FILE!, JSON.stringify(playwrightReport(result.status === 1)));
     }
-    return result;
+    return fakeOutcome(result.status, result.error);
   };
 
-  return { spawnSync, calls };
+  return { runProcess, calls };
 }
 
-test.describe("runPlaywrightTarget boundary", () => {
+test.describe("runPlaywrightTarget boundary", async () => {
   test("rejects invalid project without spawning Playwright and echoes the rejected project", async () => {
-    const { spawnSync, calls } = createSpawnTracker({ status: 0 });
+    const { runProcess, calls } = createSpawnTracker({ status: 0 });
 
-    const result = runPlaywrightTarget(
+    const result = await runPlaywrightTarget(
       {
         project: "ui",
         spec: "tests/smoke/example.spec.ts",
       },
-      {
-        spawnSync,
+      {}, {
+        runProcess,
         collectArtifacts: () => emptyArtifacts,
       },
     );
@@ -60,15 +61,15 @@ test.describe("runPlaywrightTarget boundary", () => {
   });
 
   test("rejects invalid spec without spawning and preserves the rejected spec echo", async () => {
-    const { spawnSync, calls } = createSpawnTracker({ status: 0 });
+    const { runProcess, calls } = createSpawnTracker({ status: 0 });
 
-    const result = runPlaywrightTarget(
+    const result = await runPlaywrightTarget(
       {
         project: "smoke",
         spec: "../secrets.spec.ts",
       },
-      {
-        spawnSync,
+      {}, {
+        runProcess,
         collectArtifacts: () => emptyArtifacts,
       },
     );
@@ -81,12 +82,12 @@ test.describe("runPlaywrightTarget boundary", () => {
   });
 
   test("maps child exit 0 with current passing evidence to ok + passed", async () => {
-    const { spawnSync, calls } = createSpawnTracker({ status: 0 });
+    const { runProcess, calls } = createSpawnTracker({ status: 0 });
 
-    const result = runPlaywrightTarget(
+    const result = await runPlaywrightTarget(
       { project: "smoke", workers: 1 },
-      {
-        spawnSync,
+      {}, {
+        runProcess,
         resolveCliScriptPath: () => "/fake/playwright/cli.js",
         collectArtifacts: () => emptyArtifacts,
       },
@@ -100,6 +101,7 @@ test.describe("runPlaywrightTarget boundary", () => {
       "test",
       "--project=smoke",
       "--workers=1",
+      "--output=" + path.resolve(result.execution!.artifactRoot!, "test-results"),
     ]);
     expect(result.ok).toBe(true);
     expect(result.status).toBe("passed");
@@ -115,12 +117,12 @@ test.describe("runPlaywrightTarget boundary", () => {
   });
 
   test("maps child exit 1 with current failing evidence to ok + failed", async () => {
-    const { spawnSync } = createSpawnTracker({ status: 1 });
+    const { runProcess } = createSpawnTracker({ status: 1 });
 
-    const result = runPlaywrightTarget(
+    const result = await runPlaywrightTarget(
       { project: "smoke" },
-      {
-        spawnSync,
+      {}, {
+        runProcess,
         resolveCliScriptPath: () => "/fake/playwright/cli.js",
         collectArtifacts: () => emptyArtifacts,
       },
@@ -133,12 +135,12 @@ test.describe("runPlaywrightTarget boundary", () => {
   });
 
   test("maps unexpected exit codes to execution_error", async () => {
-    const { spawnSync } = createSpawnTracker({ status: 2 });
+    const { runProcess } = createSpawnTracker({ status: 2 });
 
-    const result = runPlaywrightTarget(
+    const result = await runPlaywrightTarget(
       { project: "smoke" },
-      {
-        spawnSync,
+      {}, {
+        runProcess,
         resolveCliScriptPath: () => "/fake/playwright/cli.js",
         collectArtifacts: () => emptyArtifacts,
       },
@@ -151,15 +153,15 @@ test.describe("runPlaywrightTarget boundary", () => {
   });
 
   test("maps spawn launch errors to execution_error", async () => {
-    const { spawnSync } = createSpawnTracker({
+    const { runProcess } = createSpawnTracker({
       status: null,
       error: new Error("spawn ENOENT"),
     });
 
-    const result = runPlaywrightTarget(
+    const result = await runPlaywrightTarget(
       { project: "smoke" },
-      {
-        spawnSync,
+      {}, {
+        runProcess,
         resolveCliScriptPath: () => "/fake/playwright/cli.js",
         collectArtifacts: () => emptyArtifacts,
       },
@@ -173,12 +175,12 @@ test.describe("runPlaywrightTarget boundary", () => {
   });
 
   test("maps missing exit status to execution_error", async () => {
-    const { spawnSync } = createSpawnTracker({ status: null });
+    const { runProcess } = createSpawnTracker({ status: null });
 
-    const result = runPlaywrightTarget(
+    const result = await runPlaywrightTarget(
       { project: "smoke" },
-      {
-        spawnSync,
+      {}, {
+        runProcess,
         resolveCliScriptPath: () => "/fake/playwright/cli.js",
         collectArtifacts: () => emptyArtifacts,
       },
@@ -190,12 +192,12 @@ test.describe("runPlaywrightTarget boundary", () => {
   });
 
   test("maps CLI resolution failure to execution_error without spawning", async () => {
-    const { spawnSync, calls } = createSpawnTracker({ status: 0 });
+    const { runProcess, calls } = createSpawnTracker({ status: 0 });
 
-    const result = runPlaywrightTarget(
+    const result = await runPlaywrightTarget(
       { project: "smoke" },
-      {
-        spawnSync,
+      {}, {
+        runProcess,
         resolveCliScriptPath: () => {
           throw new Error("Could not find local Playwright CLI");
         },
@@ -211,20 +213,20 @@ test.describe("runPlaywrightTarget boundary", () => {
   });
 });
 
-test("normalizes synchronous spawn exceptions", () => {
-  const result = runPlaywrightTarget({ project: "smoke" }, {
+test("normalizes synchronous spawn exceptions", async () => {
+  const result = await runPlaywrightTarget({ project: "smoke" }, {}, {
     resolveCliScriptPath: () => "/fake/cli.js",
-    spawnSync: () => { throw new TypeError("invalid spawn argument"); },
+    runProcess: () => { throw new TypeError("invalid spawn argument"); },
   });
   expect(result).toMatchObject({ ok: false, status: "execution_error", exitCode: null,
     error: { code: "PROCESS_LAUNCH_FAILED" } });
 });
 
 for (const field of ["spec", "grep"] as const) {
-  test(`rejects NUL in ${field} without spawning`, () => {
+  test(`rejects NUL in ${field} without spawning`, async () => {
     let spawned = false;
-    const result = runPlaywrightTarget({ project: "smoke", [field]: "tests/a\0.spec.ts" }, {
-      spawnSync: () => { spawned = true; throw new Error("must not spawn"); },
+    const result = await runPlaywrightTarget({ project: "smoke", [field]: "tests/a\0.spec.ts" }, {}, {
+      runProcess: () => { spawned = true; throw new Error("must not spawn"); },
     });
     expect(spawned).toBe(false);
     expect(result.status).toBe("validation_error");
@@ -232,8 +234,8 @@ for (const field of ["spec", "grep"] as const) {
   });
 }
 
-test("artifact scanning failure preserves validation rejection", () => {
-  const result = runPlaywrightTarget({ project: "ui" }, {
+test("artifact scanning failure preserves validation rejection", async () => {
+  const result = await runPlaywrightTarget({ project: "ui" }, {}, {
     collectArtifacts: () => { throw new Error("ENOTDIR"); },
   });
   expect(result).toMatchObject({ status: "validation_error", error: { code: "INVALID_PROJECT" },
@@ -241,10 +243,10 @@ test("artifact scanning failure preserves validation rejection", () => {
 });
 
 for (const status of [0, 1, 2]) {
-  test(`artifact scanning failure preserves primary child outcome ${status}`, () => {
-    const { spawnSync } = createSpawnTracker({ status });
-    const result = runPlaywrightTarget({ project: "smoke" }, {
-      spawnSync, resolveCliScriptPath: () => "/fake/cli.js",
+  test(`artifact scanning failure preserves primary child outcome ${status}`, async () => {
+    const { runProcess } = createSpawnTracker({ status });
+    const result = await runPlaywrightTarget({ project: "smoke" }, {}, {
+      runProcess, resolveCliScriptPath: () => "/fake/cli.js",
       collectArtifacts: () => { throw new Error("ENOTDIR"); },
     });
     expect(result.status).toBe(status === 0 ? "passed" : status === 1 ? "failed" : "execution_error");
@@ -254,30 +256,30 @@ for (const status of [0, 1, 2]) {
 }
 
 for (const exitCode of [0, 1]) {
-  test(`exit ${exitCode} without current report is unable to judge`, () => {
-    const result = runPlaywrightTarget({ project: "smoke" }, {
-      spawnSync: () => ({ status: exitCode }), resolveCliScriptPath: () => "/fake/cli.js",
+  test(`exit ${exitCode} without current report is unable to judge`, async () => {
+    const result = await runPlaywrightTarget({ project: "smoke" }, {}, {
+      runProcess: async () => fakeOutcome(exitCode), resolveCliScriptPath: () => "/fake/cli.js",
     });
     expect(result).toMatchObject({ ok: false, status: "execution_error", exitCode,
       artifacts: { testResultsJson: null }, error: { code: "TEST_JUDGMENT_UNAVAILABLE" } });
   });
 }
 
-test("grep remains a single argument and never becomes shell text", () => {
-  const { spawnSync, calls } = createSpawnTracker({ status: 0 });
+test("grep remains a single argument and never becomes shell text", async () => {
+  const { runProcess, calls } = createSpawnTracker({ status: 0 });
   const grep = "@smoke; echo not-a-command";
-  runPlaywrightTarget({ project: "smoke", grep }, {
-    spawnSync, resolveCliScriptPath: () => "/fake/cli.js",
+  await runPlaywrightTarget({ project: "smoke", grep }, {}, {
+    runProcess, resolveCliScriptPath: () => "/fake/cli.js",
   });
   expect(calls[0]?.shell).toBe(false);
-  expect(calls[0]?.args.slice(-2)).toEqual(["--grep", grep]);
+  expect(calls[0]?.args.slice(-3, -1)).toEqual(["--grep", grep]);
 });
 
 for (const mode of ["malformed", "shape", "totals", "interrupted", "no-attempt", "contradictory", "runner-error"]) {
-  test(`unusable current evidence stays structured: ${mode}`, () => {
-    const result = runPlaywrightTarget({ project: "smoke" }, {
+  test(`unusable current evidence stays structured: ${mode}`, async () => {
+    const result = await runPlaywrightTarget({ project: "smoke" }, {}, {
       resolveCliScriptPath: () => "/fake/cli.js",
-      spawnSync: (_command, _args, options) => {
+      runProcess: async (_command, _args, options) => {
         const report = playwrightReport();
         if (mode === "totals") report.stats.expected = 99;
         if (mode === "interrupted") report.suites[0]!.specs[0]!.tests[0]!.results[0]!.status = "interrupted";
@@ -285,10 +287,14 @@ for (const mode of ["malformed", "shape", "totals", "interrupted", "no-attempt",
         const output = mode === "malformed" ? "{" : mode === "shape" ? "{}"
           : JSON.stringify(mode === "runner-error" ? { ...report, errors: [{ message: "setup failed" }] } : report);
         fs.writeFileSync(options.env.PLAYWRIGHT_JSON_OUTPUT_FILE!, output);
-        return { status: mode === "contradictory" ? 1 : 0 };
+        return fakeOutcome(mode === "contradictory" ? 1 : 0);
       },
     });
     expect(result).toMatchObject({ status: "execution_error", ok: false,
       error: { code: "TEST_JUDGMENT_UNAVAILABLE" } });
   });
+}
+
+function fakeOutcome(status: number | null, error?: Error): ProcessOutcome {
+  return { status, error, pid: null, signal: null, cleanup: { scope: "observed-process-tree", status: "verified", observedDescendants: 0 } };
 }

@@ -1,4 +1,4 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -15,11 +15,15 @@ function array(value: unknown): unknown[] {
 }
 
 /** Read only the native report fields needed to establish a completed judgment. */
-export function readPlaywrightJudgment(
+export async function readPlaywrightJudgment(
   reportPath: string,
   exitCode: number,
-): "passed" | "failed" {
-  const report = object(JSON.parse(fs.readFileSync(reportPath, "utf8")));
+  signal?: AbortSignal,
+): Promise<"passed" | "failed"> {
+  if ((await fs.stat(reportPath)).size > 16 * 1024 * 1024) {
+    throw new Error("Native JSON exceeds the 16 MiB judgment-read limit; inspect it directly.");
+  }
+  const report = object(JSON.parse(await fs.readFile(reportPath, { encoding: "utf8", signal })));
   if (array(report.errors).length > 0) {
     throw new Error("Playwright reported runner/discovery errors; no trustworthy test judgment.");
   }

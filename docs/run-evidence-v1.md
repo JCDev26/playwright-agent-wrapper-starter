@@ -63,9 +63,12 @@ complete native wrapper result and maps passed/failed versus unavailable judgmen
 `ok: true` intentionally includes failed tests; CLI exits remain 0=passed, 1=failed tests,
 2=validation/execution/parsing error. Existing stale/no-tests/literal-selection hardening
 remains authoritative and unchanged. Callers supply the actual tested revision/environment.
+When cleanup prevents operational success, an established native failing judgment remains
+a failed technical observation; the native lifecycle error remains the primary execution cause.
 
-Only the invocation-scoped JSON path is promoted into checks.evidence. Native HTML/JUnit
-and trace references remain presence-only and may be stale; inspect their provenance before
-review. A fresh JSON path is attribution, not authentication or proof of a passed test.
+Only the invocation-scoped JSON path is promoted into checks.evidence. New wrapper results
+also isolate HTML/JUnit/test assets and preserve operational context in native.execution.
+Older results can contain shared ancillary paths: inspect producer/run identity before
+treating them as current. A fresh JSON path is attribution, not authentication or proof of a passed test.
 The wrapper's current-run judgment has already validated native JSON contents before the
 adapter observes its status. This adapter adds no history store or concurrency service.

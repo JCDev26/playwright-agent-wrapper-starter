@@ -22,6 +22,10 @@ interface PlaywrightTargetRequest {
 
 Omitted spec/grep also normalize to null. The result target echoes accepted normalized fields or interpretable rejected input fields, preserving an invalid project string.
 
+## Asynchronous execution options
+
+Await `runPlaywrightTarget(request, options?, deps?)`. Options are `timeoutMs` (1–900000, default 300000), `cleanupTimeoutMs` (100–10000, default 5000) and optional `AbortSignal`. Test dependencies moved from argument two to argument three and use an asynchronous process seam. The target request above is unchanged. See [lifecycle](execution-lifecycle.md).
+
 ## Result
 
 ```ts
@@ -45,10 +49,11 @@ interface PlaywrightRunResult {
   };
   summary: { message: string; nextReviewPoint: string };
   error?: { code: PlaywrightRunErrorCode; detail: string };
+  execution?: PlaywrightExecution; // Additive operational metadata; see result-schema.md.
 }
 ```
 
-Only passed/failed have `ok: true`. Both require current-run native evidence of completed test attempts and an outcome consistent with the process code. Validation/execution errors have `ok: false`.
+Only passed/failed have `ok: true`. Observed cleanup must also be verified before operational success is accepted. Both require current-run native evidence of completed test attempts and an outcome consistent with the process code. Validation/execution errors have `ok: false`.
 
 `exitCode` is the child code, not the CLI code. Null means no numeric child exit code was obtained; it does not prove that no process launched. `command` is a display string, not a replayable shell interface.
 

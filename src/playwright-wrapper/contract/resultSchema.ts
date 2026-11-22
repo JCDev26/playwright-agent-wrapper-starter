@@ -24,9 +24,13 @@ export type PlaywrightRunErrorCode =
   | "INVALID_GREP"
   | "INVALID_HEADED"
   | "INVALID_WORKERS"
+  | "INVALID_RUN_OPTIONS"
   | "COMMAND_CONSTRUCTION_FAILED"
   | "PROCESS_LAUNCH_FAILED"
   | "PROCESS_COMPLETION_FAILED"
+  | "RUN_TIMEOUT"
+  | "RUN_CANCELLED"
+  | "PROCESS_CLEANUP_FAILED"
   | "TEST_JUDGMENT_UNAVAILABLE";
 
 export interface PlaywrightRunError {
@@ -43,6 +47,34 @@ export interface PlaywrightRunResult {
   artifacts: PlaywrightArtifacts;
   summary: PlaywrightRunSummary;
   error?: PlaywrightRunError;
+  /** Additive operational observation; synthetic/older results may omit it. */
+  execution?: PlaywrightExecution;
+}
+
+export interface ProcessCleanup {
+  scope: "observed-process-tree";
+  status: "not-started" | "verified" | "unverified" | "incomplete";
+  observedDescendants: number;
+  detail?: string;
+}
+
+export interface PlaywrightExecution {
+  schemaVersion: 1;
+  runId: string;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  timeoutMs: number;
+  cleanupTimeoutMs: number;
+  termination: "completed" | "timeout" | "cancelled" | "error" | "not-started";
+  pid: number | null;
+  signal: string | null;
+  /** Native report judgment, when established; cleanup can still prevent operational success. */
+  nativeJudgment?: "passed" | "failed";
+  artifactRoot: string | null;
+  cleanup: ProcessCleanup;
+  source: { revision: string | null; workingTree: "clean" | "dirty" | "unknown" };
+  environment: { id: string; platform: string; release: string; arch: string; node: string; playwright: string | null };
 }
 
 export function createPassedResult(params: {
@@ -125,7 +157,7 @@ export function createExecutionErrorResult(params: {
     exitCode: params.exitCode,
     artifacts: params.artifacts,
     summary: {
-      message: "Playwright did not produce a trustworthy completed test judgment.",
+      message: "Playwright invocation did not establish a reliable completed result.",
       nextReviewPoint: "Inspect execution context and available artifacts.",
     },
     error: {

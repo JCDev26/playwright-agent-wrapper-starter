@@ -1,50 +1,36 @@
-import fs from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { PlaywrightArtifacts } from "../contract/resultSchema";
 
-const HTML_REPORT_PATH = "artifacts/playwright-report/index.html";
-const TEST_RESULTS_JSON_PATH = "artifacts/test-results.json";
-const TEST_RESULTS_XML_PATH = "artifacts/test-results.xml";
-const TRACE_ROOT = "artifacts/test-results";
+export const emptyArtifacts = (): PlaywrightArtifacts => ({
+  htmlReport: null, testResultsJson: null, testResultsXml: null, traceFiles: [],
+});
+export const reportPath = (value: string): string => value.split(path.sep).join("/");
 
-function toRepoRelativePath(filePath: string): string {
-  return filePath.split(path.sep).join("/");
-}
-
-function fileExists(filePath: string): boolean {
-  return fs.existsSync(filePath);
-}
-
-function collectTraceFilesFromDir(dirPath: string): string[] {
-  if (!fileExists(dirPath)) {
-    return [];
-  }
-
-  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-  const collected: string[] = [];
-
-  for (const entry of entries) {
-    const fullPath = path.join(dirPath, entry.name);
-
-    if (entry.isDirectory()) {
-      collected.push(...collectTraceFilesFromDir(fullPath));
-      continue;
+export async function collectPlaywrightArtifacts(root: string | null): Promise<PlaywrightArtifacts> {
+  if (!root) return emptyArtifacts();
+  const present = async (name: string) => {
+    const file = path.join(root, name);
+    try { return (await fs.stat(file)).isFile() ? reportPath(file) : null; }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
     }
-
-    const normalized = toRepoRelativePath(fullPath);
-    if (normalized.endsWith(".zip")) {
-      collected.push(normalized);
-    }
-  }
-
-  return collected.sort();
-}
-
-export function collectPlaywrightArtifacts(): PlaywrightArtifacts {
-  return {
-    htmlReport: fileExists(HTML_REPORT_PATH) ? HTML_REPORT_PATH : null,
-    testResultsJson: fileExists(TEST_RESULTS_JSON_PATH) ? TEST_RESULTS_JSON_PATH : null,
-    testResultsXml: fileExists(TEST_RESULTS_XML_PATH) ? TEST_RESULTS_XML_PATH : null,
-    traceFiles: collectTraceFilesFromDir(TRACE_ROOT),
   };
+  const traces: string[] = [];
+  const visit = async (dir: string): Promise<void> => {
+    let entries;
+    try { entries = await fs.readdir(dir, { withFileTypes: true }); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+    for (const entry of entries) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) await visit(file);
+      else if (entry.isFile() && entry.name.endsWith(".zip")) traces.push(reportPath(file));
+    }
+  };
+  const [htmlReport, testResultsJson, testResultsXml] = await Promise.all([
+    present(path.join("html", "index.html")), present("results.json"), present("junit.xml"),
+    visit(path.join(root, "test-results")),
+  ]);
+  return { htmlReport, testResultsJson, testResultsXml, traceFiles: traces.sort() };
 }

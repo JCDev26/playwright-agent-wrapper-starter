@@ -9,7 +9,7 @@ The wrapper returns `PlaywrightRunResult`. It reports request validity and a Pla
 | `validation_error` | false | Request rejected before Playwright execution. | 2 |
 | `passed` | true | Current-run native results establish completed test attempts and an accepted Playwright outcome, consistent with child exit 0. | 0 |
 | `failed` | true | Current-run native results establish completed test attempts and unexpected test outcomes, consistent with child exit 1. | 1 |
-| `execution_error` | false | No trustworthy completed test judgment: preparation/launch failure, abnormal completion, runner/discovery errors, no tests, all skipped, or missing/unusable/contradictory result evidence. | 2 |
+| `execution_error` | false | No reliable completed invocation or trustworthy test judgment: preparation/launch failure, timeout/cancellation, unverified cleanup, runner/discovery errors, no tests, all skipped, or missing/unusable/contradictory evidence. | 2 |
 
 Playwright's expected-failure and retry semantics remain authoritative. An expected failure or a successful retry can contribute to `passed`; an unexpected pass of a test marked to fail can contribute to `failed`. Test-associated assertion, fixture, hook, or timeout failures remain Playwright test outcomes. Runner-level errors take precedence over test outcomes. Neither status diagnoses whether a defect belongs to the product, test, or environment.
 
@@ -22,6 +22,7 @@ Exit code alone never establishes `passed` or `failed`. A no-tests child exit of
 - `target`: normalized request on accepted inputs; an echo of interpretable rejected fields on validation failure. Rejected project names are not replaced by `smoke`.
 - `command`: human-readable display of constructed argv, or null before construction succeeds. It is not a shell command to execute or an exact replay contract. The actual process is Node plus the local Playwright CLI. Literal spec filters contain an escaped absolute path.
 - `exitCode`: observed Playwright child exit code. Null means no exit code was obtained: execution may never have started, or a launched process may have terminated without a numeric exit status. This is distinct from the wrapper CLI exit.
+- `execution`: additive versioned operational attribution, limits, termination and cleanup. Its nativeJudgment preserves a valid native verdict even if cleanup prevents operational success. See [lifecycle](execution-lifecycle.md).
 - `artifacts`: always present; see [artifact semantics](artifact-model.md).
 - `summary.message` and `summary.nextReviewPoint`: human review guidance, not approval gates.
 - `error`: structured code and explanatory detail for validation/execution errors; absent for passed/failed. Consumers should branch on status/code, not parse detail text.
@@ -38,9 +39,12 @@ The wrapper checks native runner errors, nested test outcomes and completed atte
 - `COMMAND_CONSTRUCTION_FAILED`: invocation or result-location preparation failed, including local CLI resolution.
 - `PROCESS_LAUNCH_FAILED`: synchronous launch exception or returned spawn error.
 - `PROCESS_COMPLETION_FAILED`: missing exit status or a child code other than 0/1.
-- `TEST_JUDGMENT_UNAVAILABLE`: child exited 0/1, but current-run evidence cannot establish a completed test judgment.
+- `TEST_JUDGMENT_UNAVAILABLE`: child exited 0/1, but current-run evidence cannot establish a completed test judgment (including JSON over 16 MiB).
+- `INVALID_RUN_OPTIONS`: operational limits or signal invalid; no child launch.
+- `RUN_TIMEOUT` / `RUN_CANCELLED`: invocation interrupted; execution_error and CLI 2, even with a numeric child code or partial/early report.
+- `PROCESS_CLEANUP_FAILED`: native judgment exists but observed process cleanup is incomplete/unverified. Native judgment and cleanup state remain separate in execution metadata.
 
-Ancillary HTML/JUnit/trace discovery failures do not replace these causes or a passed/failed result.
+Ancillary HTML/JUnit/trace discovery failures do not replace these causes or a known result. A scan that never settles remains subject to the whole-invocation deadline. Cleanup verification is a separate operational requirement.
 
 ## Example outcome excerpts
 

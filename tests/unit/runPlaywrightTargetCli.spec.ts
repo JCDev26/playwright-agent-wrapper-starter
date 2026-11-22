@@ -49,10 +49,35 @@ test.describe("runPlaywrightTargetCli machine output", () => {
     expect(parsed.status).toBe("passed");
     expect(parsed.exitCode).toBe(0);
     expect(parsed.target.project).toBe("smoke");
+    expect(parsed.execution).toMatchObject({ schemaVersion: 1, termination: "completed",
+      cleanup: { scope: "observed-process-tree", status: "verified" },
+      source: { revision: null, workingTree: "unknown" },
+      environment: { platform: process.platform, node: process.version, playwright: null } });
+    expect(parsed.execution.environment.id).toMatch(/^host:.+/);
+    expect(Date.parse(parsed.execution.finishedAt)).toBeGreaterThanOrEqual(Date.parse(parsed.execution.startedAt));
     expect(typeof parsed.command).toBe("string");
 
     // Child Playwright human output may appear on stderr, not stdout.
     expect(result.stdout.trim().startsWith("{")).toBe(true);
     expect(result.stdout.trim().endsWith("}")).toBe(true);
   });
+});
+
+for (const args of [
+  ["--project", "smoke", "--timeout-ms", "0"],
+  ["--project", "smoke", "--cleanup-timeout-ms", "10001"],
+  ["--project", "smoke", "--timeout-ms", "not-a-number"],
+]) {
+  test("operational option rejection is structured and exits 2: " + JSON.stringify(args), async ({}, info) => {
+    const child = wrapperFixture(info).run(args);
+    expect(child.status).toBe(2);
+    expect(JSON.parse(child.stdout)).toMatchObject({ ok: false, error: { code: "INVALID_RUN_OPTIONS" },
+      execution: { termination: "not-started", pid: null } });
+  });
+}
+test("a missing deadline flag value remains a parser error", async ({}, info) => {
+  const child = wrapperFixture(info).run(["--project", "smoke", "--timeout-ms"]);
+  expect(child.status).toBe(2);
+  expect(child.stdout).toBe("");
+  expect(child.stderr).toContain("Missing value");
 });

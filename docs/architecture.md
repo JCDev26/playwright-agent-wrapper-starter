@@ -6,7 +6,7 @@ This repository implements one bounded Playwright Test execution responsibility.
 External human / script / AI caller
   -> request validation
   -> literal target and argv construction
-  -> fresh native JSON result destination
+  -> fresh invocation-specific artifact root
   -> local Playwright child process
   -> native result inspection + best-effort artifact discovery
   -> normalized JSON result
@@ -16,10 +16,12 @@ External human / script / AI caller
 
 - `contract/validateInputs.ts`: request types, normalization, fixed input policy.
 - `contract/resultSchema.ts`: result types and constructors.
-- `execution/runPlaywrightTarget.ts`: invocation boundary, process handling, current-run report destination, terminal result.
+- `execution/runPlaywrightTarget.ts`: asynchronous invocation deadline, current-run artifacts, native judgment and terminal result.
+- `execution/processLifecycle.ts` and `processTree.ts`: observed descendant identity, bounded cleanup and OS facilities.
+- `execution/runAttribution.ts`: best-effort checkout observation; no attestation.
 - `execution/playwrightJudgment.ts`: small Playwright-specific projection of native JSON errors, outcomes, attempts, and totals.
 - `execution/runPlaywrightTargetCli.ts`: argument parsing, JSON output and CLI exit mapping.
-- `artifacts/playwrightArtifacts.ts`: presence checks for shared native report/trace paths.
+- `artifacts/playwrightArtifacts.ts`: presence checks beneath one invocation's artifact root.
 
 ## Boundaries
 
@@ -27,7 +29,7 @@ Callers supply fields, not raw commands. Validated spec paths become escaped lit
 
 Rejected inputs never reach spawning. Passed/failed require current-run native test evidence consistent with the child exit code. No-tests/discovery failures cannot become failed-test judgments. Synchronous launch exceptions are structured; optional artifact scanning cannot replace the primary outcome.
 
-The JSON reporter writes into a fresh invocation-specific directory solely to prevent stale or overlapping machine reports from determining a verdict. Other report paths remain shared/presence-based. See [artifact model](artifact-model.md).
+Native JSON, HTML, JUnit and test assets use a fresh invocation-specific root. All references remain presence observations; only valid native JSON can establish test judgment. See [artifact model](artifact-model.md).
 
 CLI syntax failures deliberately remain outside the JSON wrapper-result contract. Human-readable child output uses stderr.
 
@@ -39,6 +41,6 @@ There is no LLM, agent runtime, contributor registry, workflow engine, generic e
 
 ## V1 stop point
 
-The final hardening pass ends at truthful result classification, literal spec selection, structured exception handling, directly related regressions, and accurate documentation. Optional run-management features are not part of v1.
+The final hardening pass ends at truthful result classification, literal spec selection, structured exception handling, directly related regressions, and accurate documentation. The separately authorized core reliability phase extends that stop point with whole-invocation deadlines, cancellation, observed-process cleanup and isolated artifacts. The dependency/deployment pilot remains deferred. See [lifecycle limits and API migration](execution-lifecycle.md).
 
 See [contracts](contracts.md), [wrapper contract](wrapper-contract.md), [result schema](result-schema.md), and [review guidance](human-review-model.md).

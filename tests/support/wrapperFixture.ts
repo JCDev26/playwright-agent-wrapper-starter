@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import type { TestInfo } from "@playwright/test";
 import type { PlaywrightRunResult } from "../../src/playwright-wrapper/contract/resultSchema";
 
@@ -29,6 +29,22 @@ export function wrapperFixture(info: TestInfo) {
       ...args,
     ], { cwd, encoding: "utf8", shell: false, env: process.env });
   }
+  function start(args: string[]) {
+    const child = spawn(process.execPath, [
+      path.join(repo, "node_modules", "tsx", "dist", "cli.mjs"),
+      path.join(repo, "src", "playwright-wrapper", "execution", "runPlaywrightTargetCli.ts"),
+      ...args,
+    ], { cwd, shell: false, windowsHide: true, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", chunk => { stdout += chunk; });
+    child.stderr.setEncoding("utf8").on("data", chunk => { stderr += chunk; });
+    const done = new Promise<{ status: number | null; signal: string | null; stdout: string; stderr: string }>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (status, signal) => resolve({ status, signal, stdout, stderr }));
+    });
+    return { child, done };
+  }
   function request(specPath: string, extra: string[] = []) {
     const child = run(["--project", "smoke", "--spec", specPath, "--workers", "1", ...extra]);
     if (child.error) throw child.error;
@@ -38,5 +54,5 @@ export function wrapperFixture(info: TestInfo) {
   function report(result: PlaywrightRunResult) {
     return JSON.parse(fs.readFileSync(path.join(cwd, result.artifacts.testResultsJson!), "utf8"));
   }
-  return { cwd, spec, run, request, report };
+  return { cwd, spec, run, start, request, report };
 }

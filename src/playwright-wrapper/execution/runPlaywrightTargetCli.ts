@@ -1,4 +1,4 @@
-import { runPlaywrightTarget } from "./runPlaywrightTarget";
+import { runPlaywrightTarget, type RunPlaywrightOptions } from "./runPlaywrightTarget";
 import type { PlaywrightTargetRequest } from "../contract/validateInputs";
 
 function requireValue(flag: string, value: string | undefined): string {
@@ -9,11 +9,20 @@ function requireValue(flag: string, value: string | undefined): string {
   return value;
 }
 
-function parseArgs(argv: string[]): PlaywrightTargetRequest {
+function parseArgs(argv: string[]): { request: PlaywrightTargetRequest; options: RunPlaywrightOptions } {
   const request: Partial<PlaywrightTargetRequest> = {};
+  const options: RunPlaywrightOptions = {};
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
+
+    if (arg === "--timeout-ms" || arg === "--cleanup-timeout-ms") {
+      const value = Number(requireValue(arg, argv[index + 1]));
+      if (arg === "--timeout-ms") options.timeoutMs = value;
+      else options.cleanupTimeoutMs = value;
+      index += 1;
+      continue;
+    }
 
     if (arg === "--project") {
       request.project = requireValue("--project", argv[index + 1]);
@@ -52,13 +61,17 @@ function parseArgs(argv: string[]): PlaywrightTargetRequest {
     throw new Error("Missing required argument: --project <name>");
   }
 
-  return request as PlaywrightTargetRequest;
+  return { request: request as PlaywrightTargetRequest, options };
 }
 
-function main(): void {
+async function main(): Promise<void> {
+  const controller = new AbortController();
+  const cancel = () => controller.abort();
   try {
-    const request = parseArgs(process.argv.slice(2));
-    const result = runPlaywrightTarget(request);
+    const { request, options } = parseArgs(process.argv.slice(2));
+    process.on("SIGINT", cancel);
+    process.on("SIGTERM", cancel);
+    const result = await runPlaywrightTarget(request, { ...options, signal: controller.signal });
 
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 
@@ -78,7 +91,10 @@ function main(): void {
       `${error instanceof Error ? error.message : "Unknown CLI parsing error."}\n`,
     );
     process.exitCode = 2;
+  } finally {
+    process.off("SIGINT", cancel);
+    process.off("SIGTERM", cancel);
   }
 }
 
-main();
+void main();

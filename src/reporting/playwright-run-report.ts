@@ -6,9 +6,9 @@ export function toRunReport(result: PlaywrightRunResult, context: RunContext, vi
   return { ...createRunReport(context, [{
     name: "playwright",
     status: result.status === "passed" && result.ok ? "passed"
-      : result.status === "failed" ? "failed" : "inconclusive",
-    // The wrapper isolates this path for the current invocation. Other optional
-    // report/trace paths can refer to prior runs and are not promoted as fresh evidence.
+      : result.status === "failed" || result.execution?.nativeJudgment === "failed" ? "failed" : "inconclusive",
+    // Primary JSON is invocation-scoped. Native reports remain the detailed
+    // evidence surface; lifecycle metadata is preserved in native.execution.
     evidence: result.artifacts.testResultsJson ? [result.artifacts.testResultsJson] : [],
   }], visual), native: structuredClone(result) };
 }
