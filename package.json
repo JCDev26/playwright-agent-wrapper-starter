@@ -7,6 +7,7 @@
     "node": ">=22.12.0"
   },
   "scripts": {
+    "quality": "tsx src/playwright-wrapper/swarm/cli.ts",
     "agent:prepare": "tsx src/playwright-wrapper/performance/prepareMain.ts",
     "agent:performance": "tsx src/playwright-wrapper/performance/cli.ts",
     "agent:security": "tsx src/playwright-wrapper/security/cli.ts",

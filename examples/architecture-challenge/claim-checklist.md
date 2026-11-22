@@ -1,0 +1,30 @@
+# Claim checklist
+
+This worksheet uses the reference checklist at revision `43c8c74`. Review upstream question changes before updating this bundled copy. [Agentic Engineering Reference](https://github.com/JCDev26/agentic-engineering-reference)
+
+Use the classifications and evidence record in the [Architecture Challenge](https://github.com/JCDev26/agentic-engineering-reference). Each row asks a question, proposes useful evidence, and names a counterexample to investigate. Do not assume every row requires a new subsystem.
+
+| ID | Review question / belief | Evidence to seek | Pressure test |
+| --- | --- | --- | --- |
+| C01 | What is the engineering intent, and how does it affect acceptance? | Requirements, API expectations, acceptance tests, or explicit evaluation requirements and their consumers. | Change a requirement; would the result judgment change without rewriting a contributor's self-report? Who bears the consequences if the result is wrong, and which acceptance check protects their interest? |
+| C02 | Who or what are the contributors? | Actors, service identities, scripts, pipelines, handlers, adapters, and their invocation sites. | Do names such as “AI” or “human” merely label a stub? |
+| C03 | Is the contributor separate from workflow responsibility? | Workflow definitions, call boundaries, dependency direction, substitution tests. | Can the mechanism change without silently changing the definition of success? |
+| C04 | Are contributor capabilities explicitly bounded? | Grants, allowlists, capability registries, request authorization, denied-execution tests. | Does an ungranted action reach execution? |
+| C05 | Where is deterministic governance enforced? | Authorization/policy code at action boundaries; denial tests and returned decisions. | Can a caller omit required policy or bypass a check? Are prompt instructions the only enforcement? |
+| C06 | Are permissions appropriate to least privilege? | Per-role/per-stage scopes, service accounts, credential exposure, configuration, integration tests. | Does downstream work inherit broader access than required? |
+| C07 | What execution boundary actually exists? | Process/container/OS/service boundaries and deployment enforcement, or explicit trusted in-process assumptions. | Can arbitrary code act outside the declared scope? A type or interface is not a sandbox. |
+| C08 | What counts as evidence? | Tests, observations, artifacts, structured results, evidence consumers. | Is “command exited successfully” used as proof that the requested behavior is correct? |
+| C09 | Who produced the evidence, and how is provenance preserved? | Producer/contribution/run identity, original objects or immutable records, transport and verification tests. | Are observations recreated from lossy strings, or labels mistaken for authenticated identity? Which revision, inputs and attempt does this evidence cover? What change makes it historical? |
+| C10 | Is execution success distinct from engineering success? | A case where execution succeeds but validation rejects the result. | Can the contributor declare its own result correct without an independent check appropriate to risk? |
+| C11 | Can unreachable validation be represented honestly? | Applicability state and tests for blocks, missing input, or interrupted validation. | Does absent success evidence become a claim that tests ran and failed? |
+| C12 | Where do failure causes originate? | Structured causes returned by the layer that directly observes the condition. | Must higher layers parse logs or summaries to rediscover the cause? |
+| C13 | Does the primary cause survive to the terminal result? | End-to-end negative-path tests for typed cause and final status. | Does “evaluation failed” hide policy denial, missing input, selection failure, or deadlock? If a response is lost after a side effect, how does the caller distinguish unknown completion from a safe retry? |
+| C14 | Is dependence on one vendor, AI, IDE, or platform intentional? | Imports, contracts, deployment constraints, portability tests, decision records. | Is portability promised despite vendor concepts defining core business meaning? |
+| C15 | Are adapters/protocols separate from engineering semantics? | Translation boundaries, dependency direction, provider/protocol mapping tests. | Do transport states or vendor IDs decide business success without an explicit mapping? |
+| C16 | What handoffs and dependencies exist? | Data contracts, upstream/downstream traces, readiness/fan-in tests where applicable. | Can downstream execution start with missing prerequisites or fabricate their outputs? |
+| C17 | Do handoffs transfer authority unintentionally? | Receiver authorization independent of transferred artifacts/context, negative tests. | Can data content or an upstream identity silently grant permissions? |
+| C18 | What requires human review or approval? | Risk decisions, approval state, actor authorization, enforced gates, reject/expiry tests if implemented. | Is a named approval field presented as an enforced control? When work has begun, who can stop or reconcile it, and what shows that the intervention took effect? |
+| C19 | Which claims are executable rather than documented? | Traceability from each important claim to code and meaningful tests/observations. | Do tests assert only field existence, or do they exercise the claimed behavior? For a reliability or improvement claim, what representative cases, repeated trials, failures and comparison support it? |
+| C20 | What is intentionally deferred, and where does this version stop? | Explicit scope, unsupported concerns, known assumptions, bounded roadmap. | Are omissions hidden as implemented extension points, or speculative features treated as defects? |
+
+For conventional applications, “contributor” may mean a background worker or CI job, “policy” may be ordinary authorization, and “outcome” may be an API result or job status. A direct function call can be an appropriate workflow. Absence of an agent framework is not a missing architecture.
