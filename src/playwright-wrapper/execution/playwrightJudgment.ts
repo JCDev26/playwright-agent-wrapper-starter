@@ -1,4 +1,5 @@
-import fs from "node:fs";
+import policy from "../../../agents/reporting/policy.json";
+import { parseEvidenceJson, readRunResultBytes } from "../reporting/pinnedEvidence";
 
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -19,7 +20,7 @@ export function readPlaywrightJudgment(
   reportPath: string,
   exitCode: number,
 ): "passed" | "failed" {
-  return judgePlaywrightReport(JSON.parse(fs.readFileSync(reportPath, "utf8")), exitCode);
+  return judgePlaywrightReport(parseEvidenceJson(readRunResultBytes(reportPath, policy.maxSuiteBytes)), exitCode);
 }
 
 export function judgePlaywrightReport(value: unknown, exitCode: number): "passed" | "failed" {

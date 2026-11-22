@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { playwrightReport } from "../support/playwrightReport";
+import reportingPolicy from "../../agents/reporting/policy.json";
 import {
   runPlaywrightTarget as runNativeTarget,
   type PlaywrightSpawnSync,
@@ -36,6 +37,62 @@ function createSpawnTracker(result: { status: number | null; error?: Error }) {
 
   return { spawnSync, calls };
 }
+
+test("reads native results at the suite evidence limit and retains an oversized report as inconclusive", () => {
+  for (const extra of [0, 1]) {
+    const bytes = Buffer.alloc(reportingPolicy.maxSuiteBytes + extra, 0x20);
+    bytes.write(JSON.stringify(playwrightReport()));
+    const result = runPlaywrightTarget({ project: "smoke" }, {
+      spawnSync: (_cmd, _args, options) => {
+        fs.writeFileSync(options.env.PLAYWRIGHT_JSON_OUTPUT_FILE!, bytes);
+        return { status: 0 };
+      },
+    });
+    const file = result.artifacts.testResultsJson!;
+    try {
+      expect(result.status).toBe(extra ? "execution_error" : "passed");
+      if (extra) expect(result.error).toMatchObject({ code: "TEST_JUDGMENT_UNAVAILABLE", detail: "invalid_artifact_size" });
+      expect(fs.statSync(file).size).toBe(bytes.length);
+    } finally {
+      // This generated boundary case would otherwise add 32 MiB to each CI artifact bundle.
+      if (file) fs.unlinkSync(file);
+    }
+  }
+});
+
+test("a directory link ending in .zip is not a trace from this run", () => {
+  const result = runPlaywrightTarget({ project: "smoke" }, {
+    spawnSync: (_cmd, _args, options) => {
+      const file = options.env.PLAYWRIGHT_JSON_OUTPUT_FILE!;
+      fs.writeFileSync(file, JSON.stringify(playwrightReport()));
+      const folder = path.join(path.dirname(file), "test-results");
+      fs.mkdirSync(folder);
+      const linkTarget = path.resolve(path.dirname(file), "empty-folder");
+      fs.mkdirSync(linkTarget);
+      fs.symlinkSync(linkTarget, path.join(folder, "linked.zip"), "junction");
+      fs.writeFileSync(path.join(folder, "trace.zip"), "fixture");
+      return { status: 0 };
+    },
+  });
+  expect(result.status).toBe("passed");
+  const folder = path.join(path.dirname(result.artifacts.testResultsJson!), "test-results");
+  try {
+    expect(result.artifacts.traceFiles.map(file => path.basename(file))).toEqual(["trace.zip"]);
+  } finally {
+    fs.unlinkSync(path.join(folder, "linked.zip"));
+  }
+});
+
+test("reports a child termination signal even if a completed-looking report exists", () => {
+  const result = runPlaywrightTarget({ project: "smoke" }, {
+    spawnSync: (_cmd, _args, options) => {
+      fs.writeFileSync(options.env.PLAYWRIGHT_JSON_OUTPUT_FILE!, JSON.stringify(playwrightReport()));
+      return { status: null, signal: "SIGTERM" };
+    },
+  });
+  expect(result).toMatchObject({ status: "execution_error", exitCode: null,
+    error: { code: "PROCESS_COMPLETION_FAILED", detail: "Playwright process terminated by SIGTERM." } });
+});
 
 test.describe("runPlaywrightTarget boundary", () => {
   test("rejects invalid project without spawning Playwright and echoes the rejected project", async () => {

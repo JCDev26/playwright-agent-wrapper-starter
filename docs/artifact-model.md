@@ -37,6 +37,8 @@ Ancillary discovery is best-effort. If scanning HTML/JUnit/trace locations throw
 
 ## Review and limits
 
+The wrapper applies Reporting's suite JSON byte budget (currently 32 MiB) before parsing a native result. Oversized or changing files remain available for inspection. When the report cannot be read within the budget, the wrapper returns `TEST_JUDGMENT_UNAVAILABLE` and CLI exit 2. A child terminated by a signal returns `PROCESS_COMPLETION_FAILED`, with the signal name when the OS supplies it.
+
 Start with the wrapper status/error and its current-run JSON, then inspect other reports after confirming they belong to the run of interest.
 
 Fresh invocation directories isolate native classification evidence, ancillary reports, and test output for review. They are generated artifacts under the existing ignored `artifacts/` tree; there is no run identity API, history index, retention service, authentication, or tamper protection. Trusted repository code and the local environment remain assumptions. Generated artifacts can be removed when no longer needed.

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
+import { promisify } from "node:util";
 import type { TestInfo } from "@playwright/test";
 import type { PlaywrightRunResult } from "../../src/playwright-wrapper/contract/resultSchema";
 
@@ -35,12 +36,23 @@ export function wrapperFixture(info: TestInfo) {
       `const { test, expect } = require(${JSON.stringify(require.resolve("@playwright/test"))});\n${body}`);
   }
   spec("example.spec.ts", 'test("passes", () => { expect(1).toBe(1); });');
+  const wrapperArgs = [
+    path.join(repo, "node_modules", "tsx", "dist", "cli.mjs"),
+    path.join(repo, "src", "playwright-wrapper", "execution", "runPlaywrightTargetCli.ts"),
+  ];
   function run(args: string[], env: NodeJS.ProcessEnv = process.env) {
-    return spawnSync(process.execPath, [
-      path.join(repo, "node_modules", "tsx", "dist", "cli.mjs"),
-      path.join(repo, "src", "playwright-wrapper", "execution", "runPlaywrightTargetCli.ts"),
-      ...args,
-    ], { cwd, encoding: "utf8", shell: false, env });
+    return spawnSync(process.execPath, [...wrapperArgs, ...args], { cwd, encoding: "utf8", shell: false, env });
+  }
+  async function concurrentRequest(specPath: string) {
+    const args = [...wrapperArgs, "--project", "smoke", "--spec", specPath, "--workers", "1"];
+    try {
+      const child = await promisify(execFile)(process.execPath, args, { cwd, encoding: "utf8", windowsHide: true });
+      return { exit: 0, result: JSON.parse(child.stdout) as PlaywrightRunResult };
+    } catch (error) {
+      const child = error as { code?: number; stdout?: string };
+      if (child.code !== 1 || !child.stdout) throw error;
+      return { exit: 1, result: JSON.parse(child.stdout) as PlaywrightRunResult };
+    }
   }
   function request(specPath: string, extra: string[] = []) {
     const child = run(["--project", "smoke", "--spec", specPath, "--workers", "1", ...extra]);
@@ -51,5 +63,5 @@ export function wrapperFixture(info: TestInfo) {
   function report(result: PlaywrightRunResult) {
     return JSON.parse(fs.readFileSync(path.join(cwd, result.artifacts.testResultsJson!), "utf8"));
   }
-  return { cwd, spec, run, request, report };
+  return { cwd, spec, run, request, report, concurrentRequest };
 }
