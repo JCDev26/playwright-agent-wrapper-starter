@@ -53,6 +53,8 @@ Each specialist exposes one tool over MCP or JSON stdio. The host grants the cli
 
 On pull requests and pushes to main, the **collect** job runs the suite, Security and Performance and publishes Reporting's summary. The final **verify** job challenges the evidence on a fresh runner, including after a collection failure. Its summary explains whether downstream jobs may proceed. A confirmed failure stays visible when another lane lacks evidence. Maintainers decide whether to merge. [CI workflow](.github/workflows/ci.yml)
 
+GitHub adopters can lock action dependencies, require the Contrarian check on merges, explain blocked runs on demand, and sign release evidence. The accepted-main and candidate timing measurements share one runner. [GitHub governance and evidence](docs/github-governance.md)
+
 Start with the [planner, generator and failure-diagnosis exercise](docs/ai-workflow.md). It includes a seed, a human-readable plan and a reproducible product regression. The default suite runs without a model or credentials.
 
 ```sh

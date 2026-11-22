@@ -25,11 +25,17 @@ jobs:
       review_bindings: ${{ steps.capture.outputs.binding }}
       review_artifact: ${{ steps.bundle.outputs.artifact-id }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - name: Verify the Actions dependency lockfile
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh extension install github/gh-actions-lock --pin v0.5.1
+          gh actions-lock --verify
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: npm
@@ -45,6 +51,8 @@ jobs:
         id: doctor
       - run: npm run typecheck
         id: types
+      - name: Verify the advisory explainer with offline fixtures
+        run: python3 -B -m unittest discover -s tests/advisory
       - name: Discover the intended test cases on this revision
         id: plan
         env:
@@ -128,7 +136,7 @@ jobs:
       - name: Transfer the job's fixed review inputs
         id: bundle
         if: ${{ !cancelled() && steps.job.outcome == 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: review-inputs-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -148,7 +156,7 @@ jobs:
       - name: Retain current validation evidence
         id: evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-${{ github.sha }}-${{ github.run_attempt }}
           path: artifacts/
@@ -198,10 +206,10 @@ jobs:
             echo "The producer did not supply a job and review artifact. Advancement is blocked." >> "$GITHUB_STEP_SUMMARY"
             exit 2
           fi
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: ".nvmrc"
           cache: npm
@@ -234,7 +242,7 @@ jobs:
       - name: Retain the contrarian verdict
         id: receipt
         if: ${{ !cancelled() && steps.review.outcome != 'skipped' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: contrarian-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/contrarian.json

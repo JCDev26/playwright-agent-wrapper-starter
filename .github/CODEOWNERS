@@ -1,0 +1,9 @@
+# Existing maintainers with repository write access. Adopters should set their own owners.
+/.github/                            @JCDev26 @JJCruz123
+/agents/                             @JCDev26 @JJCruz123
+/scripts/                            @JCDev26 @JJCruz123
+/src/playwright-wrapper/             @JCDev26 @JJCruz123
+/tests/                              @JCDev26 @JJCruz123
+/playwright.config.ts                @JCDev26 @JJCruz123
+/package.json                        @JCDev26 @JJCruz123
+/package-lock.json                   @JCDev26 @JJCruz123
