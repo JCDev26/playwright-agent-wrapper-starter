@@ -28,7 +28,7 @@ function collectTraceFilesFromDir(dirPath: string): string[] {
     }
 
     const normalized = toRepoRelativePath(fullPath);
-    if (normalized.endsWith(".zip")) {
+    if (entry.isFile() && normalized.endsWith(".zip")) {
       collected.push(normalized);
     }
   }
