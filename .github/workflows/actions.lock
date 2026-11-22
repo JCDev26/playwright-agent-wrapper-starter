@@ -13,7 +13,7 @@ workflows:
     '.github/workflows/ci.yml':
         - 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1'
         - 'actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333'
-        - 'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020'
+        - 'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1'
         - 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'
     '.github/workflows/release-evidence.yml':
         - 'actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6'
@@ -42,11 +42,6 @@ dependencies:
         commit: 'sha1-3a2844b7e9c422d3c10d287c895573f7108da1b3'
         owner_id: 44036562
         repo_id: 205262760
-    'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020':
-        ref: 'v4.4.0'
-        commit: 'sha1-49933ea5288caeca8642d1e84afbd3f7d6820020'
-        owner_id: 44036562
-        repo_id: 189476904
     'actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1':
         ref: 'v7.1.0'
         commit: 'sha1-949feb2413d6458794dcd2491c4babbbce0c15c1'

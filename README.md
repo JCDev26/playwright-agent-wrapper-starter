@@ -1,4 +1,12 @@
-# Playwright test automation starter
+# Playwright quality wrapper
+
+After `npm ci`, run `npm run --silent quality -- tasks` to choose a quality check. Use `run web` for a browser journey, `run code` for type checking and unit tests, or `run governance` and `run agent` to challenge the wrapper's own controls. The included product is a local task board. Adopters supply the journeys, workloads and permissions for their product.
+
+| What brings you here? | Start here |
+| --- | --- |
+| Run a quality check or assign specialists to an actual job | [Quality tasks and governed handoffs](docs/quality.md) |
+| Learn checkpoint memory and steer an active team | [Interactive swarm workshop](docs/checkpoint-workshop.md) |
+| Assess another repository's architectural claims | [Agentic Engineering Reference](https://github.com/JCDev26/agentic-engineering-reference) |
 
 Test a task board on desktop and mobile, measure a real interaction, and give an AI assistant the evidence to explain a failure. The starter uses TypeScript, Playwright Test 1.65.1, and a small HTTP app that runs on your machine.
 
