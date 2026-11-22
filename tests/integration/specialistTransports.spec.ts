@@ -221,14 +221,28 @@ test("a clean job runs security once and gates the reported verdict against inde
   fs.writeFileSync(path.join(folder, "summary.json"), report.stdout);
   const reviewer = { ...sealed, ...host(["review-inputs", "initial-enrollment"], sealed), PW_AGENT_UPSTREAM_RESULT: "success" };
   const beforeReview = evidenceSnapshot(root);
+  function qualityReview(env: Record<string, string>, expectedCode: number) {
+    const child = spawnSync(process.execPath, ["--import", "tsx", "src/playwright-wrapper/swarm/cli.ts", "review"],
+      { ...options, env, timeout: 15_000 });
+    expect(child.status, child.stderr).toBe(expectedCode);
+    return JSON.parse(child.stdout);
+  }
   const approval = invoke(root, "contrarian", reviewRequest, [], reviewer);
+  expect(qualityReview(reviewer, 0).verdict).toEqual(approval.finding);
+  const session = spawnSync(process.execPath, ["--import", "tsx", "src/playwright-wrapper/swarm/cli.ts", "session"],
+    { ...options, env: reviewer, input: "save reporting\nresume reporting\nquit\n", timeout: 15_000 });
+  expect(session.status, session.stderr).toBe(0);
+  expect(session.stderr).toBe("");
+  expect(session.stdout).toContain('"evidenceChanged": false');
   expect(approval, JSON.stringify(approval.finding)).toMatchObject({
     status: 0, finding: { status: "approved", advance: true, reportedStatus: "passed", confirmedFailures: [] },
   });
   await withClient(root, "contrarian", reviewer, async client => {
     expect(await callFinding(client, "review-verdict", {})).toEqual({ isError: false, finding: approval.finding });
   });
-  const unexplained = invoke(root, "contrarian", reviewRequest, [], { ...reviewer, PW_AGENT_UPSTREAM_RESULT: "failure" });
+  const redPipeline = { ...reviewer, PW_AGENT_UPSTREAM_RESULT: "failure" };
+  const unexplained = invoke(root, "contrarian", reviewRequest, [], redPipeline);
+  expect(qualityReview(redPipeline, 2).verdict).toEqual(unexplained.finding);
   expect(unexplained).toMatchObject({
     status: 2, finding: { status: "needs_review", advance: false, reportedStatus: "passed", confirmedFailures: [] },
   });
@@ -270,6 +284,9 @@ test("a clean job runs security once and gates the reported verdict against inde
   const partial = failedJob("planned-failure");
   const beforeConfirmation = evidenceSnapshot(root);
   const confirmation = invoke(root, "contrarian", reviewRequest, [], partial);
+  const routed = qualityReview(partial, 1);
+  expect(routed.verdict).toEqual(confirmation.finding);
+  expect(routed.handoffs).toContainEqual(expect.objectContaining({ role: "reporting", confirmedFailures: ["suite"] }));
   expect(confirmation, JSON.stringify(confirmation.finding)).toMatchObject({
     status: 1, finding: { status: "failure_confirmed", advance: false, reportedStatus: "failed", confirmedFailures: ["suite"] },
   });
