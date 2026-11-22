@@ -136,7 +136,7 @@ jobs:
       - name: Transfer the job's fixed review inputs
         id: bundle
         if: ${{ !cancelled() && steps.job.outcome == 'success' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: review-inputs-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
@@ -156,7 +156,7 @@ jobs:
       - name: Retain current validation evidence
         id: evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-${{ github.sha }}-${{ github.run_attempt }}
           path: artifacts/
@@ -242,7 +242,7 @@ jobs:
       - name: Retain the contrarian verdict
         id: receipt
         if: ${{ !cancelled() && steps.review.outcome != 'skipped' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: contrarian-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/contrarian.json
