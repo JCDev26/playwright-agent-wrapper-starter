@@ -38,6 +38,7 @@ export type PlaywrightSpawnSync = (
   },
 ) => {
   status: number | null;
+  signal?: NodeJS.Signals | null;
   error?: Error;
 };
 
@@ -237,7 +238,8 @@ export function runPlaywrightTarget(
       exitCode,
       artifacts,
       code: "PROCESS_COMPLETION_FAILED",
-      detail: exitCode === null ? "Playwright process did not report an exit code."
+      detail: result.signal ? `Playwright process terminated by ${result.signal}.`
+        : exitCode === null ? "Playwright process did not report an exit code."
         : `Playwright process exited with unexpected code ${exitCode}.`,
     }));
   }

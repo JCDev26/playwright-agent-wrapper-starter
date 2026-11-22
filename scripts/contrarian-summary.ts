@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import type { VerdictReview } from "../src/playwright-wrapper/contrarian/reviewVerdict";
+import { qualityHandoffs } from "../src/playwright-wrapper/swarm/quality-job";
 
 const finding: VerdictReview = JSON.parse(readFileSync(0, "utf8"));
 console.log("## Contrarian review\n");
@@ -18,3 +19,9 @@ if (finding.challenges.length) {
   for (const code of finding.challenges) console.log("- " + code.replaceAll("_", " "));
 }
 console.log("\n" + finding.reason);
+
+const followUps = qualityHandoffs(finding).filter(item => item.confirmedFailures.length || item.challenges.length);
+if (followUps.length) {
+  console.log("\n### Specialist follow-up\n");
+  for (const item of followUps) console.log("- " + item.role + " · " + [...item.confirmedFailures, ...item.challenges].join(", "));
+}

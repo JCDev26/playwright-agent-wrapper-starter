@@ -1,0 +1,75 @@
+{
+  "protocol": "reservation-review-v1",
+  "comparison": "Single staged, packet-only pilot on 2026-11-22. Two assistant reviewers in the same session, equivalent observation access, no tools or target checkout; 150-word limit per stage. The ordinary reviewer was asked for an engineering assessment; the two-pass reviewer was asked to record a prediction, contrary observation and positive control. Both received results only after their first replies. This is a focused evidence-reading exercise, not a full external C01–C20 review.",
+  "baseline": {
+    "reviewer": "ordinary-reviewer",
+    "packetDigest": "2dbd638aae0056a60c00b8587b35fc4ff038100a61a261425734fac18edc0523",
+    "firstPass": "The retry claim is unverified for north, east, and west. Each control establishes that a booking can reach the ledger on a fresh desk.\n\nFor each configuration, I’d look for a first booking that committed, a lost acknowledgment, and a retry for that same intended booking. One matching ledger entry after the retry supports the claim for that run. Two or more refute it. If the first commit or final count is unclear, the result is inconclusive.",
+    "answers": [
+      {
+        "id": "north",
+        "verdict": "inconclusive",
+        "evidence": [
+          "north/client",
+          "north/ledger"
+        ],
+        "rationale": "The retry returned success, but the trial ledger count was unavailable."
+      },
+      {
+        "id": "east",
+        "verdict": "contradicted",
+        "evidence": [
+          "east/client",
+          "east/ledger"
+        ],
+        "rationale": "The trial started empty. After the retry, the independent ledger counted two bookings for the same intended booking."
+      },
+      {
+        "id": "west",
+        "verdict": "supported",
+        "evidence": [
+          "west/client",
+          "west/ledger"
+        ],
+        "rationale": "The trial started empty. After the lost acknowledgment and successful retry, the independent ledger counted exactly one booking."
+      }
+    ]
+  },
+  "twoPass": {
+    "reviewer": "two-pass-reviewer",
+    "packetDigest": "2dbd638aae0056a60c00b8587b35fc4ff038100a61a261425734fac18edc0523",
+    "firstPass": "For `reservation-review-v1`, I’ll assess north, east and west independently. For each configuration, I’ll count committed ledger bookings attributable to the original intent after the retry settles.\n\nIf the first booking committed, its acknowledgment was lost, and the retry reached the gateway, I predict exactly one booking. Two distinct bookings for that intent contradict the claim. A verified final count of zero also contradicts “exactly one.” A missing ledger read leaves the count unknown.\n\nThe positive control is an ordinary booking on a fresh desk in the same configuration. Seeing it in the ledger establishes that the booking and observation paths worked for that control.",
+    "answers": [
+      {
+        "id": "north",
+        "verdict": "inconclusive",
+        "evidence": [
+          "north/control",
+          "north/client",
+          "north/ledger"
+        ],
+        "rationale": "The control reached the ledger and the retry returned success. The trial ledger was unavailable, so the final count is unknown."
+      },
+      {
+        "id": "east",
+        "verdict": "contradicted",
+        "evidence": [
+          "east/control",
+          "east/client",
+          "east/ledger"
+        ],
+        "rationale": "The control reached the ledger. The trial started empty and the independent count was two after retry, contradicting the prediction of one."
+      },
+      {
+        "id": "west",
+        "verdict": "supported",
+        "evidence": [
+          "west/control",
+          "west/client",
+          "west/ledger"
+        ],
+        "rationale": "The control reached the ledger. The independent count was one after retry, matching the prediction for this trial. The first attempt’s commit timing remains unknown."
+      }
+    ]
+  }
+}

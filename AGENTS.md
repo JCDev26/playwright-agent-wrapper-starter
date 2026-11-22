@@ -2,6 +2,7 @@
 
 This is a bounded Playwright Test wrapper, not a production agent platform.
 Read README.md first; load task-specific contracts and tests only as needed.
+For a quality task, use docs/quality.md to select an existing area. The operator owns the task console. A specialist receives its role-bound brief and returns a data packet.
 Input contract: src/playwright-wrapper/contract; execution and judgment: src/playwright-wrapper/execution; artifacts: src/playwright-wrapper/artifacts.
 Portable observation contract: docs/run-evidence-v1.md; implementation: src/reporting/run-report.ts.
 Each governed specialist has its own role instructions and versioned policy under

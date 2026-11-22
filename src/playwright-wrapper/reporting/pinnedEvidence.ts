@@ -106,6 +106,11 @@ export function readWrapperReport(root: string, reference: unknown, kind: "recei
 
 export const maxNativeBytes = 2 * 1024 * 1024;
 
+/** Read an invocation-owned result using the same bounded reader as sealed CI reports. */
+export function readRunResultBytes(file: string, maxBytes: number): Buffer {
+  return readArtifact(path.dirname(path.resolve(file)), [], path.basename(file), maxBytes);
+}
+
 function readArtifact(root: string, directories: string[], name: string, maxBytes: number): Buffer {
   let fd: number | undefined;
   try {
