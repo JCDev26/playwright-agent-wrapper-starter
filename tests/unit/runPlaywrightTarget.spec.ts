@@ -48,9 +48,15 @@ test("reads native results at the suite evidence limit and retains an oversized 
         return { status: 0 };
       },
     });
-    expect(result.status).toBe(extra ? "execution_error" : "passed");
-    if (extra) expect(result.error).toMatchObject({ code: "TEST_JUDGMENT_UNAVAILABLE", detail: "invalid_artifact_size" });
-    expect(fs.statSync(result.artifacts.testResultsJson!).size).toBe(bytes.length);
+    const file = result.artifacts.testResultsJson!;
+    try {
+      expect(result.status).toBe(extra ? "execution_error" : "passed");
+      if (extra) expect(result.error).toMatchObject({ code: "TEST_JUDGMENT_UNAVAILABLE", detail: "invalid_artifact_size" });
+      expect(fs.statSync(file).size).toBe(bytes.length);
+    } finally {
+      // This generated boundary case would otherwise add 32 MiB to each CI artifact bundle.
+      if (file) fs.unlinkSync(file);
+    }
   }
 });
 
@@ -69,7 +75,12 @@ test("a directory link ending in .zip is not a trace from this run", () => {
     },
   });
   expect(result.status).toBe("passed");
-  expect(result.artifacts.traceFiles.map(file => path.basename(file))).toEqual(["trace.zip"]);
+  const folder = path.join(path.dirname(result.artifacts.testResultsJson!), "test-results");
+  try {
+    expect(result.artifacts.traceFiles.map(file => path.basename(file))).toEqual(["trace.zip"]);
+  } finally {
+    fs.unlinkSync(path.join(folder, "linked.zip"));
+  }
 });
 
 test("reports a child termination signal even if a completed-looking report exists", () => {
