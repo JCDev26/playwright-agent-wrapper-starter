@@ -3,6 +3,33 @@ import path from "node:path";
 import { test, expect } from "@playwright/test";
 import { wrapperFixture } from "../support/wrapperFixture";
 
+test("two overlapping requests in one checkout retain their own judgments and artifacts", async ({}, info) => {
+  const fixture = wrapperFixture(info);
+  for (const name of ["pass", "fail"]) {
+    const other = name === "pass" ? "fail" : "pass";
+    fixture.spec(name + ".spec.ts", `test("${name}", async () => {
+      const fs = require("node:fs");
+      fs.writeFileSync("${name}.ready", "");
+      await expect.poll(() => fs.existsSync("${other}.ready"), { timeout: 15000 }).toBe(true);
+      expect("${name}").toBe("pass");
+    });`);
+  }
+  const outcomes = await Promise.all(["pass", "fail"].map(name => fixture.concurrentRequest("tests/smoke/" + name + ".spec.ts")));
+  expect(outcomes.map(run => [run.exit, run.result.status])).toEqual([[0, "passed"], [1, "failed"]]);
+  const roots = outcomes.map(({ result }) => path.posix.dirname(result.artifacts.testResultsJson!));
+  expect(roots[0]).not.toBe(roots[1]);
+  for (const [index, { result }] of outcomes.entries()) {
+    const report = fixture.report(result);
+    expect(report.stats.unexpected).toBe(index);
+    expect(JSON.stringify(report.suites)).toContain(index ? "fail.spec.ts" : "pass.spec.ts");
+    expect(result.artifacts.traceFiles.length).toBeGreaterThan(0);
+    for (const file of [result.artifacts.testResultsXml!, result.artifacts.htmlReport!, ...result.artifacts.traceFiles]) {
+      expect(file.startsWith(roots[index] + "/")).toBe(true);
+      expect(fs.statSync(path.join(fixture.cwd, file)).isFile()).toBe(true);
+    }
+  }
+});
+
 test("real assertion failure has failing evidence, child 1 and CLI 1", ({}, info) => {
   const fixture = wrapperFixture(info);
   fixture.spec("fails.spec.ts", 'test("real failure", () => { expect(1).toBe(2); });');
